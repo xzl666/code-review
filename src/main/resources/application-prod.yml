@@ -1,0 +1,6 @@
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${CODE_REVIEW_DB_HOST}:${CODE_REVIEW_DB_PORT:33066}/${CODE_REVIEW_DB_NAME:code_review}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: ${CODE_REVIEW_DB_USERNAME}
+    password: ${CODE_REVIEW_DB_PASSWORD}

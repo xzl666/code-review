@@ -1,0 +1,29 @@
+package com.cmbchina.codereview.interfaces.dto.response;
+
+import lombok.Data;
+
+@Data
+public class ProjectResponse {
+
+    private Long id;
+
+    private String projectName;
+
+    private String projectCode;
+
+    private String projectType;
+
+    private String repoUrl;
+
+    private Integer useDefaultToken;
+
+    private String defaultBranch;
+
+    private String ownerName;
+
+    private Integer reviewDays;
+
+    private Integer status;
+
+    private String remark;
+}

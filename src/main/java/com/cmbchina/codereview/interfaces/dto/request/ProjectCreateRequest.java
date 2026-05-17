@@ -1,0 +1,34 @@
+package com.cmbchina.codereview.interfaces.dto.request;
+
+import javax.validation.constraints.Min;
+import javax.validation.constraints.NotBlank;
+import lombok.Data;
+
+@Data
+public class ProjectCreateRequest {
+
+    @NotBlank(message = "不能为空")
+    private String projectName;
+
+    @NotBlank(message = "不能为空")
+    private String projectCode;
+
+    @NotBlank(message = "不能为空")
+    private String projectType;
+
+    @NotBlank(message = "不能为空")
+    private String repoUrl;
+
+    private String projectToken;
+
+    private Integer useDefaultToken;
+
+    private String defaultBranch;
+
+    private String ownerName;
+
+    @Min(value = 1, message = "必须大于 0")
+    private Integer reviewDays;
+
+    private String remark;
+}
