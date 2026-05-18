@@ -45,8 +45,14 @@
         <el-table-column prop="issueSource" label="来源" width="90" />
         <el-table-column prop="summary" label="摘要" min-width="220" show-overflow-tooltip />
         <el-table-column prop="filePath" label="文件" min-width="260" show-overflow-tooltip />
-        <el-table-column label="行号" width="100">
+        <el-table-column label="起始行" width="90">
           <template #default="{ row }">{{ lineText(row.startLine) }}</template>
+        </el-table-column>
+        <el-table-column label="结束行" width="90">
+          <template #default="{ row }">{{ lineText(row.endLine) }}</template>
+        </el-table-column>
+        <el-table-column label="检查时间" width="170">
+          <template #default="{ row }">{{ formatTime(row.createTime) }}</template>
         </el-table-column>
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">{{ statusText(row.status) }}</template>
@@ -80,6 +86,7 @@
         <div><span>严重度</span><el-tag :type="severityType(detail.severity)">{{ severityText(detail.severity) }}</el-tag></div>
         <div><span>状态</span><strong>{{ statusText(detail.status) }}</strong></div>
         <div><span>问题类型</span><strong>{{ detail.issueType || '-' }}</strong></div>
+        <div><span>检查时间</span><strong>{{ formatTime(detail.createTime) }}</strong></div>
         <div class="detail-full"><span>文件</span><strong>{{ detail.filePath }}</strong></div>
         <div><span>起始行</span><strong>{{ lineText(detail.startLine) }}</strong></div>
         <div><span>结束行</span><strong>{{ lineText(detail.endLine) }}</strong></div>
@@ -210,6 +217,10 @@ function statusText(status: string) {
 
 function lineText(line?: number) {
   return line && line > 0 ? line : '-'
+}
+
+function formatTime(value?: string) {
+  return value ? value.replace('T', ' ') : '-'
 }
 
 onMounted(() => {

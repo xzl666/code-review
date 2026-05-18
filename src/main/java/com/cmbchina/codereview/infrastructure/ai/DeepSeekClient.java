@@ -96,7 +96,7 @@ public class DeepSeekClient {
                                                String branch,
                                                Integer reviewDays) {
         List<Map<String, String>> messages = new ArrayList<>();
-        messages.add(message("system", "You are a strict code review assistant. Return only structured issues through the provided function."));
+        messages.add(message("system", "You are a strict code review assistant. Return only structured issues through the provided function. Descriptive fields such as summary, detail and suggestion must be written in Chinese."));
         String prompt = renderPrompt(rule.getPromptTemplate(), project, chunk, branch, reviewDays);
         messages.add(message("user", prompt));
         return messages;
@@ -110,6 +110,8 @@ public class DeepSeekClient {
         prompt = prompt.replace("${reviewDays}", String.valueOf(reviewDays));
         prompt = prompt.replace("${diffContent}", value(chunk.getContent()));
         return prompt
+            + "\n\n请使用中文填写 summary、detail、suggestion 等描述性字段。"
+            + "\n如果能定位行号，请填写 startLine 和 endLine；如果只定位到单行，startLine 和 endLine 使用同一个行号。"
             + "\n\nFile: " + chunk.getFilePath()
             + "\nChunkIndex: " + chunk.getChunkIndex()
             + "\nOldStartLine: " + value(chunk.getOldStartLine())

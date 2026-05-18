@@ -18,6 +18,7 @@ export interface ReviewIssue {
   codeSnippet?: string
   rawResponse?: string
   status: string
+  createTime?: string
 }
 
 export interface IssueQuery {

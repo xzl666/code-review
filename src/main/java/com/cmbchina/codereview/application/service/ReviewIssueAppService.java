@@ -138,6 +138,7 @@ public class ReviewIssueAppService {
         response.setCodeSnippet(entity.getCodeSnippet());
         response.setRawResponse(entity.getRawResponse());
         response.setStatus(entity.getStatus());
+        response.setCreateTime(entity.getCreateTime());
         return response;
     }
 

@@ -1,5 +1,6 @@
 package com.cmbchina.codereview.interfaces.dto.response;
 
+import java.time.LocalDateTime;
 import lombok.Data;
 
 @Data
@@ -38,4 +39,6 @@ public class ReviewIssueResponse {
     private String rawResponse;
 
     private String status;
+
+    private LocalDateTime createTime;
 }

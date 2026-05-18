@@ -65,14 +65,14 @@ public class AiReviewExecutor {
                 entity.setIssueSource(IssueSource.AI.name());
                 entity.setSeverity(normalizeSeverity(text(issue, "severity", rule.getSeverity()), rule.getSeverity()));
                 entity.setIssueType(text(issue, "issueType", rule.getRuleType()));
-                entity.setFilePath(text(issue, "filePath", chunk.getFilePath()));
-                Integer startLine = normalizeLine(integer(issue, "startLine", null));
+                entity.setFilePath(firstText(issue, chunk.getFilePath(), "filePath", "filename", "file"));
+                Integer startLine = normalizeLine(firstInteger(issue, null, "startLine", "line", "newLine"));
                 entity.setStartLine(startLine);
-                entity.setEndLine(normalizeLine(integer(issue, "endLine", startLine)));
-                entity.setSummary(text(issue, "summary", text(issue, "title", rule.getRuleName())));
-                entity.setDetail(text(issue, "detail", text(issue, "description", "")));
-                entity.setSuggestion(text(issue, "suggestion", ""));
-                entity.setCodeSnippet(text(issue, "codeSnippet", ""));
+                entity.setEndLine(normalizeLine(firstInteger(issue, startLine, "endLine", "lineEnd", "newEndLine")));
+                entity.setSummary(firstText(issue, rule.getRuleName(), "summary", "title", "message", "description"));
+                entity.setDetail(firstText(issue, "", "detail", "description", "message"));
+                entity.setSuggestion(firstText(issue, "", "suggestion", "suggestedFix", "fix", "recommendation"));
+                entity.setCodeSnippet(firstText(issue, "", "codeSnippet", "snippet"));
                 entity.setRawResponse(limit(arguments, 10000));
                 entity.setStatus(ReviewIssueStatus.OPEN.name());
                 reviewIssueMapper.insert(entity);
@@ -89,12 +89,32 @@ public class AiReviewExecutor {
         return value == null || value.isNull() ? defaultValue : value.asText();
     }
 
+    private String firstText(JsonNode node, String defaultValue, String... fields) {
+        for (String field : fields) {
+            JsonNode value = node.get(field);
+            if (value != null && !value.isNull() && !value.asText().trim().isEmpty()) {
+                return value.asText();
+            }
+        }
+        return defaultValue;
+    }
+
     private Integer integer(JsonNode node, String field, Integer defaultValue) {
         JsonNode value = node.get(field);
         if (value == null || !value.canConvertToInt()) {
             return defaultValue;
         }
         return value.asInt();
+    }
+
+    private Integer firstInteger(JsonNode node, Integer defaultValue, String... fields) {
+        for (String field : fields) {
+            JsonNode value = node.get(field);
+            if (value != null && value.canConvertToInt()) {
+                return value.asInt();
+            }
+        }
+        return defaultValue;
     }
 
     private String limit(String value, int maxLength) {
