@@ -7,6 +7,7 @@ import com.cmbchina.codereview.interfaces.dto.request.DefaultTokenUpdateRequest;
 import com.cmbchina.codereview.interfaces.dto.request.DeepSeekConfigUpdateRequest;
 import com.cmbchina.codereview.interfaces.dto.response.DefaultTokenResponse;
 import com.cmbchina.codereview.interfaces.dto.response.DeepSeekConfigResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -24,6 +25,9 @@ public class SystemConfigAppService {
 
     private final SystemConfigRepository systemConfigRepository;
 
+    @Value("${code-review.git.gitee-token:${CODE_REVIEW_GITEE_TOKEN:}}")
+    private String defaultGiteeTokenFallback;
+
     public SystemConfigAppService(SystemConfigRepository systemConfigRepository) {
         this.systemConfigRepository = systemConfigRepository;
     }
@@ -39,7 +43,7 @@ public class SystemConfigAppService {
 
     public String getDefaultGiteeToken() {
         SystemConfig config = systemConfigRepository.findByKey(DEFAULT_GITEE_TOKEN_KEY);
-        return config == null ? null : config.getConfigValue();
+        return defaultIfBlank(defaultGiteeTokenFallback, config == null ? null : config.getConfigValue());
     }
 
     public DefaultTokenResponse getDefaultGiteeTokenDetail() {
@@ -62,17 +66,17 @@ public class SystemConfigAppService {
     }
 
     public DeepSeekConfigResponse getDeepSeekConfigDetail(String fallbackApiKey, String fallbackUrl, String fallbackModel) {
-        String apiKey = getConfigValue(DEEPSEEK_API_KEY);
-        String url = getConfigValue(DEEPSEEK_URL);
-        String model = getConfigValue(DEEPSEEK_MODEL);
+        String apiKey = fallbackApiKey;
+        String url = fallbackUrl;
+        String model = fallbackModel;
         if (!StringUtils.hasText(apiKey)) {
-            apiKey = fallbackApiKey;
+            apiKey = getConfigValue(DEEPSEEK_API_KEY);
         }
         if (!StringUtils.hasText(url)) {
-            url = fallbackUrl;
+            url = getConfigValue(DEEPSEEK_URL);
         }
         if (!StringUtils.hasText(model)) {
-            model = fallbackModel;
+            model = getConfigValue(DEEPSEEK_MODEL);
         }
         DeepSeekConfigResponse response = new DeepSeekConfigResponse();
         response.setConfigured(StringUtils.hasText(apiKey));
@@ -83,15 +87,15 @@ public class SystemConfigAppService {
     }
 
     public String getDeepSeekApiKey(String fallbackApiKey) {
-        return defaultIfBlank(getConfigValue(DEEPSEEK_API_KEY), fallbackApiKey);
+        return defaultIfBlank(fallbackApiKey, getConfigValue(DEEPSEEK_API_KEY));
     }
 
     public String getDeepSeekUrl(String fallbackUrl) {
-        return defaultIfBlank(getConfigValue(DEEPSEEK_URL), fallbackUrl);
+        return defaultIfBlank(fallbackUrl, getConfigValue(DEEPSEEK_URL));
     }
 
     public String getDeepSeekModel(String fallbackModel) {
-        return defaultIfBlank(getConfigValue(DEEPSEEK_MODEL), fallbackModel);
+        return defaultIfBlank(fallbackModel, getConfigValue(DEEPSEEK_MODEL));
     }
 
     private String getConfigValue(String key) {

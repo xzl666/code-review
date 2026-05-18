@@ -31,10 +31,7 @@ public class LocalRepositoryManager {
             Files.createDirectories(repoRoot);
             Path repoDir = repoRoot.resolve(safeName(project.getProjectCode() + "-" + project.getId()));
             if (Files.exists(repoDir.resolve(".git"))) {
-                run(repoDir, "git", "remote", "set-url", "origin", authUrl(project.getRepoUrl(), token));
-                run(repoDir, "git", "fetch", "origin", branch, "--prune");
-                run(repoDir, "git", "checkout", branch);
-                run(repoDir, "git", "pull", "--ff-only", "origin", branch);
+                refresh(repoDir, project.getRepoUrl(), branch, token);
                 return repoDir;
             }
             run(repoRoot, "git", "clone", "--branch", branch, "--single-branch", authUrl(project.getRepoUrl(), token), repoDir.toAbsolutePath().toString());
@@ -46,18 +43,35 @@ public class LocalRepositoryManager {
         }
     }
 
-    public GitCommandResult run(Path workingDirectory, String... command) {
+    private void refresh(Path repoDir, String repoUrl, String branch, String token) {
         try {
+            run(repoDir, "git", "remote", "set-url", "origin", authUrl(repoUrl, token));
+            run(repoDir, "git", "fetch", "origin", branch, "--prune", "--depth=200");
+            run(repoDir, "git", "checkout", branch);
+            run(repoDir, "git", "pull", "--ff-only", "origin", branch);
+        } catch (BizException exception) {
+            run(repoDir, "git", "checkout", branch);
+        }
+    }
+
+    public GitCommandResult run(Path workingDirectory, String... command) {
+        Path stdoutPath = null;
+        Path stderrPath = null;
+        try {
+            stdoutPath = Files.createTempFile("code-review-git-stdout-", ".log");
+            stderrPath = Files.createTempFile("code-review-git-stderr-", ".log");
             ProcessBuilder builder = new ProcessBuilder(command);
             builder.directory(workingDirectory.toFile());
+            builder.redirectOutput(stdoutPath.toFile());
+            builder.redirectError(stderrPath.toFile());
             Process process = builder.start();
             boolean finished = process.waitFor(GIT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             if (!finished) {
                 process.destroyForcibly();
                 throw new BizException(ErrorCode.BIZ_ERROR, "git command timeout: " + maskCommand(command));
             }
-            String stdout = read(process.getInputStream());
-            String stderr = read(process.getErrorStream());
+            String stdout = readFile(stdoutPath);
+            String stderr = readFile(stderrPath);
             GitCommandResult result = new GitCommandResult(process.exitValue(), stdout, stderr);
             if (result.getExitCode() != 0) {
                 throw new BizException(ErrorCode.BIZ_ERROR, "git command failed: " + maskCommand(command) + "; " + stderr);
@@ -67,6 +81,9 @@ public class LocalRepositoryManager {
             throw exception;
         } catch (Exception exception) {
             throw new BizException(ErrorCode.BIZ_ERROR, "git command error: " + exception.getMessage());
+        } finally {
+            deleteQuietly(stdoutPath);
+            deleteQuietly(stderrPath);
         }
     }
 
@@ -95,6 +112,23 @@ public class LocalRepositoryManager {
             }
         }
         return builder.toString();
+    }
+
+    private String readFile(Path path) throws Exception {
+        if (path == null || !Files.exists(path)) {
+            return "";
+        }
+        byte[] bytes = Files.readAllBytes(path);
+        return new String(bytes, StandardCharsets.UTF_8);
+    }
+
+    private void deleteQuietly(Path path) {
+        try {
+            if (path != null) {
+                Files.deleteIfExists(path);
+            }
+        } catch (Exception ignored) {
+        }
     }
 
     private String maskCommand(String[] command) {

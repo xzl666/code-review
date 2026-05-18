@@ -14,4 +14,10 @@ public class GitDiffSummary {
     private List<String> filePaths = Collections.emptyList();
 
     private String diffContent = "";
+
+    private Integer skippedCommitCount = 0;
+
+    private Integer skippedFileCount = 0;
+
+    private List<String> warnings = Collections.emptyList();
 }

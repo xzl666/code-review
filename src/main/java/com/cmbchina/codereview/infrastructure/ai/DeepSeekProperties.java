@@ -9,10 +9,10 @@ public class DeepSeekProperties {
     @Value("${code-review.ai.deepseek.api-key:${CODE_REVIEW_DEEPSEEK_API_KEY:}}")
     private String apiKey;
 
-    @Value("${code-review.ai.deepseek.url:${CODE_REVIEW_DEEPSEEK_URL:https://api.deepseek.com/chat/completions}}")
+    @Value("${code-review.ai.deepseek.url:${CODE_REVIEW_DEEPSEEK_URL:${CODE_REVIEW_DEEPSEEK_BASE_URL:https://zhenze-huhehaote.cmecloud.cn}}}")
     private String url;
 
-    @Value("${code-review.ai.deepseek.model:${CODE_REVIEW_DEEPSEEK_MODEL:deepseek-chat}}")
+    @Value("${code-review.ai.deepseek.model:${CODE_REVIEW_DEEPSEEK_MODEL:deepseek-v4-flash}}")
     private String model;
 
     @Value("${code-review.ai.deepseek.timeout-seconds:${CODE_REVIEW_DEEPSEEK_TIMEOUT_SECONDS:60}}")
@@ -20,6 +20,9 @@ public class DeepSeekProperties {
 
     @Value("${code-review.ai.max-diff-chars-per-request:${CODE_REVIEW_AI_MAX_DIFF_CHARS:30000}}")
     private Integer maxDiffCharsPerRequest;
+
+    @Value("${code-review.ai.max-chunks-per-task:${CODE_REVIEW_AI_MAX_CHUNKS_PER_TASK:3}}")
+    private Integer maxChunksPerTask;
 
     public String getApiKey() {
         return apiKey;
@@ -39,5 +42,9 @@ public class DeepSeekProperties {
 
     public Integer getMaxDiffCharsPerRequest() {
         return maxDiffCharsPerRequest;
+    }
+
+    public Integer getMaxChunksPerTask() {
+        return maxChunksPerTask;
     }
 }

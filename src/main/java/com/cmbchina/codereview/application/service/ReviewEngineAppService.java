@@ -50,6 +50,7 @@ public class ReviewEngineAppService {
     private final DeepSeekProperties deepSeekProperties;
     private final AiReviewExecutor aiReviewExecutor;
     private final ScriptReviewExecutor scriptReviewExecutor;
+    private final NotificationDispatchService notificationDispatchService;
     private final Executor reviewTaskExecutor;
 
     public ReviewEngineAppService(ReviewTaskMapper reviewTaskMapper,
@@ -65,6 +66,7 @@ public class ReviewEngineAppService {
                                   DeepSeekProperties deepSeekProperties,
                                   AiReviewExecutor aiReviewExecutor,
                                   ScriptReviewExecutor scriptReviewExecutor,
+                                  NotificationDispatchService notificationDispatchService,
                                   @Qualifier("reviewTaskExecutor") Executor reviewTaskExecutor) {
         this.reviewTaskMapper = reviewTaskMapper;
         this.reviewIssueMapper = reviewIssueMapper;
@@ -79,6 +81,7 @@ public class ReviewEngineAppService {
         this.deepSeekProperties = deepSeekProperties;
         this.aiReviewExecutor = aiReviewExecutor;
         this.scriptReviewExecutor = scriptReviewExecutor;
+        this.notificationDispatchService = notificationDispatchService;
         this.reviewTaskExecutor = reviewTaskExecutor;
     }
 
@@ -105,8 +108,10 @@ public class ReviewEngineAppService {
             executeScriptRules(taskId, project, diffSummary, branch);
             TaskIssueCounters counters = countIssues(taskId);
             markSuccess(taskId, diffSummary, counters, aiCallCount);
+            notificationDispatchService.notifyTaskSuccess(reviewTaskMapper.selectById(taskId));
         } catch (Exception exception) {
             markFailed(taskId, exception.getMessage());
+            notificationDispatchService.notifyTaskFailed(reviewTaskMapper.selectById(taskId));
         }
     }
 
@@ -158,6 +163,10 @@ public class ReviewEngineAppService {
         List<DiffChunk> chunks = diffChunkService.split(diffSummary, deepSeekProperties.getMaxDiffCharsPerRequest());
         if (chunks.isEmpty()) {
             return 0;
+        }
+        if (deepSeekProperties.getMaxChunksPerTask() != null && deepSeekProperties.getMaxChunksPerTask() > 0
+            && chunks.size() > deepSeekProperties.getMaxChunksPerTask()) {
+            chunks = chunks.subList(0, deepSeekProperties.getMaxChunksPerTask());
         }
         int aiCallCount = 0;
         for (ReviewRuleEntity rule : rules) {
@@ -218,7 +227,7 @@ public class ReviewEngineAppService {
             .set(ReviewTaskEntity::getInfoCount, counters.infoCount)
             .set(ReviewTaskEntity::getAiCallCount, aiCallCount)
             .set(ReviewTaskEntity::getEndTime, LocalDateTime.now())
-            .set(ReviewTaskEntity::getErrorMessage, null);
+            .set(ReviewTaskEntity::getErrorMessage, warningMessage(diffSummary));
         reviewTaskMapper.update(null, wrapper);
     }
 
@@ -240,6 +249,13 @@ public class ReviewEngineAppService {
             return value;
         }
         return value.substring(0, maxLength);
+    }
+
+    private String warningMessage(GitDiffSummary diffSummary) {
+        if (diffSummary.getWarnings() == null || diffSummary.getWarnings().isEmpty()) {
+            return null;
+        }
+        return limit(String.join(" ", diffSummary.getWarnings()), 1000);
     }
 
     private static class TaskIssueCounters {

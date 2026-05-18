@@ -94,11 +94,12 @@ public class ScriptReviewExecutor {
                 entity.setRuleId(rule.getId());
                 entity.setSkillId(rule.getSkillId());
                 entity.setIssueSource(IssueSource.SCRIPT.name());
-                entity.setSeverity(text(issue, "severity", rule.getSeverity()));
+                entity.setSeverity(normalizeSeverity(text(issue, "severity", rule.getSeverity()), rule.getSeverity()));
                 entity.setIssueType(text(issue, "issueType", rule.getRuleType()));
                 entity.setFilePath(text(issue, "filePath", ""));
-                entity.setStartLine(integer(issue, "startLine", null));
-                entity.setEndLine(integer(issue, "endLine", integer(issue, "startLine", null)));
+                Integer startLine = normalizeLine(integer(issue, "startLine", null));
+                entity.setStartLine(startLine);
+                entity.setEndLine(normalizeLine(integer(issue, "endLine", startLine)));
                 entity.setSummary(text(issue, "summary", text(issue, "title", rule.getRuleName())));
                 entity.setDetail(text(issue, "detail", ""));
                 entity.setSuggestion(text(issue, "suggestion", ""));
@@ -167,7 +168,10 @@ public class ScriptReviewExecutor {
 
     private Integer integer(JsonNode node, String field, Integer defaultValue) {
         JsonNode value = node.get(field);
-        return value == null || !value.canConvertToInt() ? defaultValue : value.asInt();
+        if (value == null || !value.canConvertToInt()) {
+            return defaultValue;
+        }
+        return value.asInt();
     }
 
     private String limit(String value, int maxLength) {
@@ -175,5 +179,29 @@ public class ScriptReviewExecutor {
             return value;
         }
         return value.substring(0, maxLength);
+    }
+
+    private String normalizeSeverity(String value, String defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+        String upper = value.toUpperCase();
+        if ("ERROR".equals(upper) || "HIGH".equals(upper)) {
+            return "MAJOR";
+        }
+        if ("WARNING".equals(upper) || "WARN".equals(upper) || "MEDIUM".equals(upper)) {
+            return "MINOR";
+        }
+        if ("LOW".equals(upper) || "NOTICE".equals(upper)) {
+            return "INFO";
+        }
+        if ("BLOCKER".equals(upper) || "CRITICAL".equals(upper) || "MAJOR".equals(upper) || "MINOR".equals(upper) || "INFO".equals(upper)) {
+            return upper;
+        }
+        return defaultValue;
+    }
+
+    private Integer normalizeLine(Integer value) {
+        return value == null || value < 1 ? null : value;
     }
 }

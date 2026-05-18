@@ -42,7 +42,7 @@ public class DeepSeekClient {
 
     public String review(Project project, ReviewRuleEntity rule, AiSkillEntity skill, DiffChunk chunk, String branch, Integer reviewDays) {
         String apiKey = systemConfigAppService.getDeepSeekApiKey(properties.getApiKey());
-        String url = systemConfigAppService.getDeepSeekUrl(properties.getUrl());
+        String url = normalizeChatCompletionsUrl(systemConfigAppService.getDeepSeekUrl(properties.getUrl()));
         String model = systemConfigAppService.getDeepSeekModel(properties.getModel());
         if (!StringUtils.hasText(apiKey)) {
             throw new BizException(ErrorCode.BIZ_ERROR, "DeepSeek API key is not configured");
@@ -151,6 +151,17 @@ public class DeepSeekClient {
 
     private String value(String value) {
         return value == null ? "" : value;
+    }
+
+    private String normalizeChatCompletionsUrl(String url) {
+        if (!StringUtils.hasText(url) || url.contains("/chat/completions")) {
+            return url;
+        }
+        String trimmed = url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
+        if (trimmed.endsWith("/v1")) {
+            return trimmed + "/chat/completions";
+        }
+        return trimmed + "/v1/chat/completions";
     }
 
     private RestTemplate restTemplate() {
