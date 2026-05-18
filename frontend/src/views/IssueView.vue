@@ -8,7 +8,6 @@
       <el-select v-model="query.projectId" clearable filterable placeholder="项目" class="toolbar-select">
         <el-option v-for="project in projectOptions" :key="project.id" :label="project.projectName" :value="project.id" />
       </el-select>
-      <el-input-number v-model="query.taskId" :min="1" placeholder="任务 ID" class="toolbar-select" />
       <el-select v-model="query.issueSource" clearable placeholder="来源" class="toolbar-select">
         <el-option label="AI" value="AI" />
         <el-option label="脚本" value="SCRIPT" />
@@ -108,7 +107,6 @@ const projectOptions = ref<Project[]>([])
 const total = ref(0)
 
 const query = reactive({
-  taskId: undefined as number | undefined,
   projectId: undefined as number | undefined,
   issueSource: '',
   severity: '',
@@ -163,7 +161,6 @@ async function downloadExport() {
 
 function currentQuery() {
   return {
-    taskId: query.taskId,
     projectId: query.projectId,
     issueSource: query.issueSource || undefined,
     severity: query.severity || undefined,
