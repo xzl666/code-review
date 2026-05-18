@@ -13,6 +13,10 @@ public class DashboardOverviewResponse {
 
     private Long todayIssueCount;
 
+    private Long openIssueCount;
+
+    private Long todayAiCallCount;
+
     private Long blockerCount;
 
     private Long criticalCount;

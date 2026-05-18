@@ -44,40 +44,109 @@
 
 <script setup lang="ts">
 import * as echarts from 'echarts'
-import { onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Bot, FolderGit2, ListChecks, Workflow } from 'lucide-vue-next'
+import { getDashboardOverview, getIssueTrend, getSeverityDistribution, type NameValue } from '@/api/dashboard'
 
 const range = ref('7 天')
 const trendRef = ref<HTMLDivElement>()
+const overview = ref({
+  projectCount: 0,
+  enabledProjectCount: 0,
+  todayTaskCount: 0,
+  todayIssueCount: 0,
+  openIssueCount: 0,
+  todayAiCallCount: 0,
+  blockerCount: 0,
+  criticalCount: 0
+})
+const trend = ref<NameValue[]>([])
+const severityRows = ref<NameValue[]>([])
+let chart: echarts.ECharts | undefined
 
-const metrics = [
-  { label: '项目总数', value: '0', note: '等待项目接入', icon: FolderGit2, tone: 'tone-blue' },
-  { label: '今日任务', value: '0', note: '手动与定时任务', icon: Workflow, tone: 'tone-cyan' },
-  { label: '开放问题', value: '0', note: 'OPEN 状态', icon: ListChecks, tone: 'tone-red' },
-  { label: 'AI 调用', value: '0', note: '今日累计', icon: Bot, tone: 'tone-green' }
-]
+const metrics = computed(() => [
+  {
+    label: '项目总数',
+    value: String(overview.value.projectCount),
+    note: `已启用 ${overview.value.enabledProjectCount} 个`,
+    icon: FolderGit2,
+    tone: 'tone-blue'
+  },
+  {
+    label: '今日任务',
+    value: String(overview.value.todayTaskCount),
+    note: `今日发现 ${overview.value.todayIssueCount} 个问题`,
+    icon: Workflow,
+    tone: 'tone-cyan'
+  },
+  {
+    label: '开放问题',
+    value: String(overview.value.openIssueCount),
+    note: `阻断 ${overview.value.blockerCount} / 严重 ${overview.value.criticalCount}`,
+    icon: ListChecks,
+    tone: 'tone-red'
+  },
+  {
+    label: 'AI 调用',
+    value: String(overview.value.todayAiCallCount),
+    note: '今日累计',
+    icon: Bot,
+    tone: 'tone-green'
+  }
+])
 
-const severity = [
-  { name: '阻断', value: 0, color: '#9f1239' },
-  { name: '严重', value: 0, color: '#dc2626' },
-  { name: '主要', value: 0, color: '#ea580c' },
-  { name: '次要', value: 0, color: '#2563eb' },
-  { name: '提示', value: 0, color: '#64748b' }
-]
+const severityColors: Record<string, string> = {
+  阻断: '#9f1239',
+  严重: '#dc2626',
+  主要: '#ea580c',
+  次要: '#2563eb',
+  提示: '#64748b'
+}
 
-onMounted(() => {
+const severity = computed(() =>
+  severityRows.value.map((item) => ({
+    ...item,
+    color: severityColors[item.name] || '#64748b'
+  }))
+)
+
+async function loadDashboard() {
+  const [overviewData, trendData, severityData] = await Promise.all([
+    getDashboardOverview(),
+    getIssueTrend(currentRangeDays()),
+    getSeverityDistribution()
+  ])
+  overview.value = overviewData
+  trend.value = trendData
+  severityRows.value = severityData
+  await nextTick()
+  renderTrend()
+}
+
+async function loadTrend() {
+  trend.value = await getIssueTrend(currentRangeDays())
+  await nextTick()
+  renderTrend()
+}
+
+function currentRangeDays() {
+  return range.value.startsWith('30') ? 30 : 7
+}
+
+function renderTrend() {
   if (!trendRef.value) return
-  const chart = echarts.init(trendRef.value)
+  chart = chart || echarts.init(trendRef.value)
   chart.setOption({
     grid: { top: 28, right: 20, bottom: 34, left: 36 },
     xAxis: {
       type: 'category',
-      data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+      data: trend.value.map((item) => item.name.slice(5)),
       axisLine: { lineStyle: { color: '#d7deea' } },
       axisLabel: { color: '#64748b' }
     },
     yAxis: {
       type: 'value',
+      minInterval: 1,
       splitLine: { lineStyle: { color: '#edf2f8' } },
       axisLabel: { color: '#64748b' }
     },
@@ -85,7 +154,7 @@ onMounted(() => {
       {
         type: 'line',
         smooth: true,
-        data: [0, 0, 0, 0, 0, 0, 0],
+        data: trend.value.map((item) => item.value),
         symbolSize: 8,
         areaStyle: { color: 'rgba(14, 165, 233, 0.12)' },
         itemStyle: { color: '#0891b2' },
@@ -94,5 +163,23 @@ onMounted(() => {
     ],
     tooltip: { trigger: 'axis' }
   })
+}
+
+onMounted(() => {
+  loadDashboard()
+  window.addEventListener('resize', resizeChart)
 })
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', resizeChart)
+  chart?.dispose()
+})
+
+watch(range, () => {
+  loadTrend()
+})
+
+function resizeChart() {
+  chart?.resize()
+}
 </script>

@@ -16,15 +16,17 @@ public class SchemaMigrationService {
     @PostConstruct
     public void migrate() {
         addColumnIfMissing("cr_project", "schedule_cron",
-            "ALTER TABLE cr_project ADD COLUMN schedule_cron VARCHAR(128) DEFAULT NULL COMMENT '定时检视 Cron 表达式' AFTER review_days");
+            "ALTER TABLE cr_project ADD COLUMN schedule_cron VARCHAR(128) DEFAULT NULL COMMENT 'schedule cron' AFTER review_days");
         addColumnIfMissing("cr_project", "schedule_enabled",
-            "ALTER TABLE cr_project ADD COLUMN schedule_enabled TINYINT NOT NULL DEFAULT 0 COMMENT '是否启用定时检视' AFTER schedule_cron");
+            "ALTER TABLE cr_project ADD COLUMN schedule_enabled TINYINT NOT NULL DEFAULT 0 COMMENT 'schedule enabled' AFTER schedule_cron");
         addColumnIfMissing("cr_review_task", "skipped_commit_count",
-            "ALTER TABLE cr_review_task ADD COLUMN skipped_commit_count INT NOT NULL DEFAULT 0 COMMENT '跳过提交数量' AFTER ai_call_count");
+            "ALTER TABLE cr_review_task ADD COLUMN skipped_commit_count INT NOT NULL DEFAULT 0 COMMENT 'skipped commit count' AFTER ai_call_count");
         addColumnIfMissing("cr_review_task", "skipped_file_count",
-            "ALTER TABLE cr_review_task ADD COLUMN skipped_file_count INT NOT NULL DEFAULT 0 COMMENT '跳过文件数量' AFTER skipped_commit_count");
+            "ALTER TABLE cr_review_task ADD COLUMN skipped_file_count INT NOT NULL DEFAULT 0 COMMENT 'skipped file count' AFTER skipped_commit_count");
         addColumnIfMissing("cr_review_task", "warning_message",
-            "ALTER TABLE cr_review_task ADD COLUMN warning_message TEXT COMMENT '成功任务提示信息' AFTER end_time");
+            "ALTER TABLE cr_review_task ADD COLUMN warning_message TEXT COMMENT 'task warning message' AFTER end_time");
+        addColumnIfMissing("cr_review_task", "error_message",
+            "ALTER TABLE cr_review_task ADD COLUMN error_message TEXT COMMENT 'task error message' AFTER warning_message");
     }
 
     private void addColumnIfMissing(String tableName, String columnName, String ddl) {

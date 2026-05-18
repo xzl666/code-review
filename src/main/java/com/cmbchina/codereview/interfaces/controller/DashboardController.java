@@ -5,7 +5,9 @@ import com.cmbchina.codereview.common.response.ApiResponse;
 import com.cmbchina.codereview.interfaces.dto.response.DashboardOverviewResponse;
 import com.cmbchina.codereview.interfaces.dto.response.NameValueResponse;
 import java.util.List;
+import java.util.Map;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -25,8 +27,9 @@ public class DashboardController {
     }
 
     @PostMapping("/issue-trend")
-    public ApiResponse<List<NameValueResponse>> issueTrend() {
-        return ApiResponse.success(dashboardAppService.issueTrend());
+    public ApiResponse<List<NameValueResponse>> issueTrend(@RequestBody(required = false) Map<String, Integer> request) {
+        Integer days = request == null ? null : request.get("days");
+        return ApiResponse.success(dashboardAppService.issueTrend(days));
     }
 
     @PostMapping("/severity-distribution")

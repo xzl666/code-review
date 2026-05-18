@@ -47,6 +47,11 @@ public class DashboardAppService {
         response.setEnabledProjectCount(projectMapper.selectCount(new LambdaQueryWrapper<ProjectEntity>().eq(ProjectEntity::getStatus, 1)));
         response.setTodayTaskCount(reviewTaskMapper.selectCount(new LambdaQueryWrapper<ReviewTaskEntity>().ge(ReviewTaskEntity::getCreateTime, today)));
         response.setTodayIssueCount(reviewIssueMapper.selectCount(new LambdaQueryWrapper<ReviewIssueEntity>().ge(ReviewIssueEntity::getCreateTime, today)));
+        response.setOpenIssueCount(reviewIssueMapper.selectCount(new LambdaQueryWrapper<ReviewIssueEntity>().eq(ReviewIssueEntity::getStatus, "OPEN")));
+        response.setTodayAiCallCount(reviewTaskMapper.selectList(new LambdaQueryWrapper<ReviewTaskEntity>().ge(ReviewTaskEntity::getCreateTime, today))
+            .stream()
+            .mapToLong(task -> task.getAiCallCount() == null ? 0L : task.getAiCallCount())
+            .sum());
         response.setBlockerCount(reviewIssueMapper.selectCount(new LambdaQueryWrapper<ReviewIssueEntity>().eq(ReviewIssueEntity::getSeverity, "BLOCKER")));
         response.setCriticalCount(reviewIssueMapper.selectCount(new LambdaQueryWrapper<ReviewIssueEntity>().eq(ReviewIssueEntity::getSeverity, "CRITICAL")));
         return response;
@@ -56,18 +61,19 @@ public class DashboardAppService {
         List<ReviewIssueEntity> issues = reviewIssueMapper.selectList(new LambdaQueryWrapper<ReviewIssueEntity>());
         Map<String, Long> grouped = issues.stream().collect(Collectors.groupingBy(ReviewIssueEntity::getSeverity, Collectors.counting()));
         return Arrays.asList(
-            new NameValueResponse("阻断", grouped.getOrDefault("BLOCKER", 0L)),
-            new NameValueResponse("严重", grouped.getOrDefault("CRITICAL", 0L)),
-            new NameValueResponse("主要", grouped.getOrDefault("MAJOR", 0L)),
-            new NameValueResponse("次要", grouped.getOrDefault("MINOR", 0L)),
-            new NameValueResponse("提示", grouped.getOrDefault("INFO", 0L))
+            new NameValueResponse("\u963b\u65ad", grouped.getOrDefault("BLOCKER", 0L)),
+            new NameValueResponse("\u4e25\u91cd", grouped.getOrDefault("CRITICAL", 0L)),
+            new NameValueResponse("\u4e3b\u8981", grouped.getOrDefault("MAJOR", 0L)),
+            new NameValueResponse("\u6b21\u8981", grouped.getOrDefault("MINOR", 0L)),
+            new NameValueResponse("\u63d0\u793a", grouped.getOrDefault("INFO", 0L))
         );
     }
 
-    public List<NameValueResponse> issueTrend() {
-        return java.util.stream.IntStream.rangeClosed(0, 6)
+    public List<NameValueResponse> issueTrend(Integer days) {
+        int rangeDays = days == null || days <= 0 ? 7 : Math.min(days, 30);
+        return java.util.stream.IntStream.rangeClosed(0, rangeDays - 1)
             .mapToObj(offset -> {
-                LocalDate day = LocalDate.now().minusDays(6L - offset);
+                LocalDate day = LocalDate.now().minusDays((long) rangeDays - 1 - offset);
                 Long count = reviewIssueMapper.selectCount(new LambdaQueryWrapper<ReviewIssueEntity>()
                     .ge(ReviewIssueEntity::getCreateTime, day.atStartOfDay())
                     .lt(ReviewIssueEntity::getCreateTime, day.plusDays(1).atStartOfDay()));
