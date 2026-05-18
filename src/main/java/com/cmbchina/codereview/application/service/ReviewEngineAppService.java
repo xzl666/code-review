@@ -226,8 +226,11 @@ public class ReviewEngineAppService {
             .set(ReviewTaskEntity::getMinorCount, counters.minorCount)
             .set(ReviewTaskEntity::getInfoCount, counters.infoCount)
             .set(ReviewTaskEntity::getAiCallCount, aiCallCount)
+            .set(ReviewTaskEntity::getSkippedCommitCount, diffSummary.getSkippedCommitCount())
+            .set(ReviewTaskEntity::getSkippedFileCount, diffSummary.getSkippedFileCount())
             .set(ReviewTaskEntity::getEndTime, LocalDateTime.now())
-            .set(ReviewTaskEntity::getErrorMessage, warningMessage(diffSummary));
+            .set(ReviewTaskEntity::getWarningMessage, warningMessage(diffSummary))
+            .set(ReviewTaskEntity::getErrorMessage, null);
         reviewTaskMapper.update(null, wrapper);
     }
 
@@ -236,6 +239,7 @@ public class ReviewEngineAppService {
             .eq(ReviewTaskEntity::getId, taskId)
             .set(ReviewTaskEntity::getStatus, ReviewTaskStatus.FAILED.name())
             .set(ReviewTaskEntity::getEndTime, LocalDateTime.now())
+            .set(ReviewTaskEntity::getWarningMessage, null)
             .set(ReviewTaskEntity::getErrorMessage, limit(message, 1000));
         reviewTaskMapper.update(null, wrapper);
     }

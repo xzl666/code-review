@@ -17,9 +17,12 @@ export interface ReviewTask {
   minorCount: number
   infoCount: number
   aiCallCount: number
+  skippedCommitCount?: number
+  skippedFileCount?: number
   status: string
   startTime?: string
   endTime?: string
+  warningMessage?: string
   errorMessage?: string
 }
 

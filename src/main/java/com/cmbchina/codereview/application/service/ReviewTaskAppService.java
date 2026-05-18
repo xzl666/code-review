@@ -66,6 +66,8 @@ public class ReviewTaskAppService {
         entity.setMinorCount(0);
         entity.setInfoCount(0);
         entity.setAiCallCount(0);
+        entity.setSkippedCommitCount(0);
+        entity.setSkippedFileCount(0);
         entity.setStatus(ReviewTaskStatus.PENDING.name());
         reviewTaskMapper.insert(entity);
         submitAfterCommit(entity.getId());
@@ -127,6 +129,7 @@ public class ReviewTaskAppService {
             .lt(ReviewTaskEntity::getStartTime, timeoutBefore)
             .set(ReviewTaskEntity::getStatus, ReviewTaskStatus.FAILED.name())
             .set(ReviewTaskEntity::getEndTime, LocalDateTime.now())
+            .set(ReviewTaskEntity::getWarningMessage, null)
             .set(ReviewTaskEntity::getErrorMessage, "任务运行超时，系统启动时自动关闭");
         reviewTaskMapper.update(null, wrapper);
     }
@@ -141,6 +144,7 @@ public class ReviewTaskAppService {
         LambdaUpdateWrapper<ReviewTaskEntity> wrapper = new LambdaUpdateWrapper<ReviewTaskEntity>()
             .eq(ReviewTaskEntity::getId, id)
             .set(ReviewTaskEntity::getStatus, status)
+            .set(ReviewTaskEntity::getWarningMessage, null)
             .set(ReviewTaskEntity::getErrorMessage, errorMessage);
         reviewTaskMapper.update(null, wrapper);
     }
@@ -171,9 +175,12 @@ public class ReviewTaskAppService {
         response.setMinorCount(entity.getMinorCount());
         response.setInfoCount(entity.getInfoCount());
         response.setAiCallCount(entity.getAiCallCount());
+        response.setSkippedCommitCount(entity.getSkippedCommitCount());
+        response.setSkippedFileCount(entity.getSkippedFileCount());
         response.setStatus(entity.getStatus());
         response.setStartTime(entity.getStartTime());
         response.setEndTime(entity.getEndTime());
+        response.setWarningMessage(entity.getWarningMessage());
         response.setErrorMessage(entity.getErrorMessage());
         return response;
     }

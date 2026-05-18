@@ -38,11 +38,17 @@ public class ReviewTaskResponse {
 
     private Integer aiCallCount;
 
+    private Integer skippedCommitCount;
+
+    private Integer skippedFileCount;
+
     private String status;
 
     private LocalDateTime startTime;
 
     private LocalDateTime endTime;
+
+    private String warningMessage;
 
     private String errorMessage;
 }

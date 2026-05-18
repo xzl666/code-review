@@ -41,7 +41,15 @@
         <el-table-column prop="diffFileCount" label="文件" width="80" />
         <el-table-column prop="issueCount" label="问题" width="80" />
         <el-table-column prop="aiCallCount" label="AI 调用" width="95" />
-        <el-table-column prop="errorMessage" label="提示/错误" min-width="260" show-overflow-tooltip />
+        <el-table-column label="裁剪" width="100">
+          <template #default="{ row }">
+            <el-tag v-if="hasSkipped(row)" type="warning" effect="plain">{{ (row.skippedCommitCount || 0) + (row.skippedFileCount || 0) }}</el-tag>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="提示/错误" min-width="260" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.warningMessage || row.errorMessage || '' }}</template>
+        </el-table-column>
         <el-table-column label="操作" width="210" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" :icon="Eye" @click="openDetail(row.id)">详情</el-button>
@@ -91,11 +99,13 @@
         <div><span>分支</span><strong>{{ detail.reviewBranch }}</strong></div>
         <div><span>检视天数</span><strong>{{ detail.reviewDays }}</strong></div>
         <div><span>提交/文件/问题</span><strong>{{ detail.commitCount }} / {{ detail.diffFileCount }} / {{ detail.issueCount }}</strong></div>
+        <div><span>跳过提交/文件</span><strong>{{ detail.skippedCommitCount || 0 }} / {{ detail.skippedFileCount || 0 }}</strong></div>
         <div><span>严重度分布</span><strong>阻断 {{ detail.blockerCount }}，严重 {{ detail.criticalCount }}，主要 {{ detail.majorCount }}，次要 {{ detail.minorCount }}，提示 {{ detail.infoCount }}</strong></div>
         <div><span>AI 调用</span><strong>{{ detail.aiCallCount }}</strong></div>
         <div><span>开始时间</span><strong>{{ detail.startTime || '-' }}</strong></div>
         <div><span>结束时间</span><strong>{{ detail.endTime || '-' }}</strong></div>
-        <div class="detail-full"><span>提示/错误</span><pre>{{ detail.errorMessage || '-' }}</pre></div>
+        <div class="detail-full"><span>提示</span><pre>{{ detail.warningMessage || '-' }}</pre></div>
+        <div class="detail-full"><span>错误</span><pre>{{ detail.errorMessage || '-' }}</pre></div>
       </div>
     </el-drawer>
   </div>
@@ -229,6 +239,10 @@ function statusText(status: string) {
 
 function statusType(status: string) {
   return ({ SUCCESS: 'success', FAILED: 'danger', RUNNING: 'warning', PENDING: 'primary', CANCELED: 'info' } as Record<string, string>)[status] || 'info'
+}
+
+function hasSkipped(task: ReviewTask) {
+  return (task.skippedCommitCount || 0) > 0 || (task.skippedFileCount || 0) > 0
 }
 
 onMounted(() => {
