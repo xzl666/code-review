@@ -64,6 +64,17 @@ public class ProjectRepositoryImpl implements ProjectRepository {
     }
 
     @Override
+    public List<Project> listScheduledEnabled() {
+        LambdaQueryWrapper<ProjectEntity> wrapper = new LambdaQueryWrapper<ProjectEntity>()
+            .eq(ProjectEntity::getStatus, 1)
+            .eq(ProjectEntity::getScheduleEnabled, 1)
+            .isNotNull(ProjectEntity::getScheduleCron);
+        return projectMapper.selectList(wrapper).stream()
+            .map(ProjectConverter::toDomain)
+            .collect(Collectors.toList());
+    }
+
+    @Override
     public void logicalDelete(Long id) {
         projectMapper.deleteById(id);
     }

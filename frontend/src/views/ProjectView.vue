@@ -39,13 +39,20 @@
         <el-table-column prop="defaultBranch" label="默认分支" width="120" />
         <el-table-column prop="ownerName" label="责任人" width="120" />
         <el-table-column prop="reviewDays" label="检视天数" width="100" />
+        <el-table-column label="定时检视" min-width="190" show-overflow-tooltip>
+          <template #default="{ row }">
+            <el-tag v-if="row.scheduleEnabled === 1" type="success" effect="plain">{{ row.scheduleCron }}</el-tag>
+            <el-tag v-else type="info" effect="plain">未启用</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="status" label="状态" width="90">
           <template #default="{ row }">
             <el-tag :type="row.status === 1 ? 'success' : 'info'">{{ row.status === 1 ? '启用' : '停用' }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="260" fixed="right">
+        <el-table-column label="操作" width="340" fixed="right">
           <template #default="{ row }">
+            <el-button link type="primary" :icon="Rocket" @click="triggerReview(row)">触发检视</el-button>
             <el-button link type="primary" :icon="Edit" @click="openEdit(row)">编辑</el-button>
             <el-button v-if="row.status === 1" link type="warning" :icon="Pause" @click="setStatus(row, false)">停用</el-button>
             <el-button v-else link type="success" :icon="Play" @click="setStatus(row, true)">启用</el-button>
@@ -89,6 +96,14 @@
         <el-form-item label="检视天数" prop="reviewDays">
           <el-input-number v-model="form.reviewDays" :min="1" :max="365" />
         </el-form-item>
+        <el-form-item label="定时检视">
+          <el-switch v-model="scheduleEnabled" active-text="启用" inactive-text="停用" />
+        </el-form-item>
+        <el-form-item label="Cron 表达式" prop="scheduleCron">
+          <el-input v-model="form.scheduleCron" placeholder="例如：0 0 9 * * *">
+            <template #append>秒 分 时 日 月 周</template>
+          </el-input>
+        </el-form-item>
         <el-form-item label="访问令牌">
           <el-input v-model="form.projectToken" type="password" show-password />
         </el-form-item>
@@ -111,7 +126,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Edit, Pause, Play, Plus, Search, Trash2 } from 'lucide-vue-next'
+import { Edit, Pause, Play, Plus, Rocket, Search, Trash2 } from 'lucide-vue-next'
 import {
   createProject,
   deleteProject,
@@ -122,6 +137,7 @@ import {
   type Project,
   type ProjectForm
 } from '@/api/project'
+import { startReviewTask } from '@/api/reviewTask'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -149,6 +165,8 @@ const form = reactive<ProjectForm>({
   defaultBranch: 'master',
   ownerName: '',
   reviewDays: 7,
+  scheduleCron: '',
+  scheduleEnabled: 0,
   remark: ''
 })
 
@@ -156,6 +174,13 @@ const useDefaultToken = computed({
   get: () => form.useDefaultToken === 1,
   set: (value: boolean) => {
     form.useDefaultToken = value ? 1 : 0
+  }
+})
+
+const scheduleEnabled = computed({
+  get: () => form.scheduleEnabled === 1,
+  set: (value: boolean) => {
+    form.scheduleEnabled = value ? 1 : 0
   }
 })
 
@@ -184,6 +209,8 @@ function resetForm() {
     defaultBranch: 'master',
     ownerName: '',
     reviewDays: 7,
+    scheduleCron: '',
+    scheduleEnabled: 0,
     remark: ''
   })
 }
@@ -223,6 +250,8 @@ function openEdit(row: Project) {
     defaultBranch: row.defaultBranch,
     ownerName: row.ownerName || '',
     reviewDays: row.reviewDays,
+    scheduleCron: row.scheduleCron || '',
+    scheduleEnabled: row.scheduleEnabled || 0,
     status: row.status,
     remark: row.remark || ''
   })
@@ -256,6 +285,20 @@ async function setStatus(row: Project, enabled: boolean) {
   }
   ElMessage.success(enabled ? '项目已启用' : '项目已停用')
   await loadProjects()
+}
+
+async function triggerReview(row: Project) {
+  await ElMessageBox.confirm(`确认立即触发「${row.projectName}」的一次代码检视？`, '触发检视', {
+    type: 'warning',
+    confirmButtonText: '触发',
+    cancelButtonText: '取消'
+  })
+  await startReviewTask({
+    projectId: row.id,
+    branch: row.defaultBranch,
+    reviewDays: row.reviewDays
+  })
+  ElMessage.success('检视任务已提交')
 }
 
 async function removeProject(row: Project) {

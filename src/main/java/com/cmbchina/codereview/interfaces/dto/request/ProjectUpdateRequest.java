@@ -34,6 +34,10 @@ public class ProjectUpdateRequest {
     @Min(value = 1, message = "必须大于 0")
     private Integer reviewDays;
 
+    private String scheduleCron;
+
+    private Integer scheduleEnabled;
+
     private Integer status;
 
     private String remark;

@@ -23,6 +23,8 @@ public final class ProjectConverter {
         project.setDefaultBranch(entity.getDefaultBranch());
         project.setOwnerName(entity.getOwnerName());
         project.setReviewDays(entity.getReviewDays());
+        project.setScheduleCron(entity.getScheduleCron());
+        project.setScheduleEnabled(entity.getScheduleEnabled());
         project.setStatus(entity.getStatus());
         project.setRemark(entity.getRemark());
         return project;
@@ -43,6 +45,8 @@ public final class ProjectConverter {
         entity.setDefaultBranch(project.getDefaultBranch());
         entity.setOwnerName(project.getOwnerName());
         entity.setReviewDays(project.getReviewDays());
+        entity.setScheduleCron(project.getScheduleCron());
+        entity.setScheduleEnabled(project.getScheduleEnabled());
         entity.setStatus(project.getStatus());
         entity.setRemark(project.getRemark());
         return entity;

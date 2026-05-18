@@ -24,6 +24,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -52,6 +53,7 @@ public class ProjectAppService {
 
     @Transactional(rollbackFor = Exception.class)
     public Long create(ProjectCreateRequest request) {
+        validateSchedule(request.getScheduleEnabled(), request.getScheduleCron());
         Project project = new Project();
         project.setProjectName(request.getProjectName());
         project.setProjectCode(request.getProjectCode());
@@ -62,6 +64,8 @@ public class ProjectAppService {
         project.setDefaultBranch(defaultIfBlank(request.getDefaultBranch(), DEFAULT_BRANCH));
         project.setOwnerName(request.getOwnerName());
         project.setReviewDays(request.getReviewDays() == null ? DEFAULT_REVIEW_DAYS : request.getReviewDays());
+        project.setScheduleCron(request.getScheduleCron());
+        project.setScheduleEnabled(request.getScheduleEnabled() == null ? 0 : request.getScheduleEnabled());
         project.setStatus(BaseStatus.ENABLED.getValue());
         project.setRemark(request.getRemark());
         return projectRepository.save(project);
@@ -70,6 +74,7 @@ public class ProjectAppService {
     @Transactional(rollbackFor = Exception.class)
     public void update(ProjectUpdateRequest request) {
         ensureExists(request.getId());
+        validateSchedule(request.getScheduleEnabled(), request.getScheduleCron());
         Project project = new Project();
         project.setId(request.getId());
         project.setProjectName(request.getProjectName());
@@ -81,6 +86,8 @@ public class ProjectAppService {
         project.setDefaultBranch(request.getDefaultBranch());
         project.setOwnerName(request.getOwnerName());
         project.setReviewDays(request.getReviewDays());
+        project.setScheduleCron(request.getScheduleCron());
+        project.setScheduleEnabled(request.getScheduleEnabled() == null ? 0 : request.getScheduleEnabled());
         project.setStatus(request.getStatus());
         project.setRemark(request.getRemark());
         projectRepository.update(project);
@@ -207,6 +214,8 @@ public class ProjectAppService {
         response.setDefaultBranch(project.getDefaultBranch());
         response.setOwnerName(project.getOwnerName());
         response.setReviewDays(project.getReviewDays());
+        response.setScheduleCron(project.getScheduleCron());
+        response.setScheduleEnabled(project.getScheduleEnabled());
         response.setStatus(project.getStatus());
         response.setRemark(project.getRemark());
         return response;
@@ -239,6 +248,7 @@ public class ProjectAppService {
         project.setDefaultBranch(defaultIfBlank(cell(row, 5, formatter), DEFAULT_BRANCH));
         project.setOwnerName(cell(row, 6, formatter));
         project.setReviewDays(parseReviewDays(cell(row, 7, formatter)));
+        project.setScheduleEnabled(0);
         project.setStatus(BaseStatus.ENABLED.getValue());
         project.setRemark("Excel 导入");
         return project;
@@ -301,5 +311,17 @@ public class ProjectAppService {
             return code;
         }
         return projectName.replaceAll("\\s+", "-").toLowerCase();
+    }
+
+    private void validateSchedule(Integer scheduleEnabled, String scheduleCron) {
+        if (scheduleEnabled == null || scheduleEnabled == 0) {
+            return;
+        }
+        if (!StringUtils.hasText(scheduleCron)) {
+            throw new BizException(ErrorCode.PARAM_ERROR, "启用定时检视时 Cron 表达式不能为空");
+        }
+        if (!CronExpression.isValidExpression(scheduleCron)) {
+            throw new BizException(ErrorCode.PARAM_ERROR, "Cron 表达式格式不正确，请使用 6 位 Spring Cron，例如：0 0 9 * * *");
+        }
     }
 }

@@ -25,6 +25,10 @@ public class Project {
 
     private Integer reviewDays;
 
+    private String scheduleCron;
+
+    private Integer scheduleEnabled;
+
     private Integer status;
 
     private String remark;

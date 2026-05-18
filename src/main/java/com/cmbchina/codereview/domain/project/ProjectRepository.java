@@ -1,6 +1,7 @@
 package com.cmbchina.codereview.domain.project;
 
 import com.cmbchina.codereview.common.response.PageResponse;
+import java.util.List;
 
 public interface ProjectRepository {
 
@@ -13,6 +14,8 @@ public interface ProjectRepository {
     Project findByNameAndRepoUrl(String projectName, String repoUrl);
 
     PageResponse<Project> page(String projectName, String projectType, Integer status, long pageNo, long pageSize);
+
+    List<Project> listScheduledEnabled();
 
     void logicalDelete(Long id);
 

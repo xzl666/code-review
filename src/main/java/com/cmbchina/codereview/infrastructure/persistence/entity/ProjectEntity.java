@@ -32,6 +32,10 @@ public class ProjectEntity extends BaseEntity {
 
     private Integer reviewDays;
 
+    private String scheduleCron;
+
+    private Integer scheduleEnabled;
+
     private Integer status;
 
     private String remark;

@@ -23,6 +23,10 @@ public class ProjectResponse {
 
     private Integer reviewDays;
 
+    private String scheduleCron;
+
+    private Integer scheduleEnabled;
+
     private Integer status;
 
     private String remark;

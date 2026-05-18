@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS cr_project (
   default_branch VARCHAR(128) NOT NULL DEFAULT 'master' COMMENT '默认分支',
   owner_name VARCHAR(64) DEFAULT NULL COMMENT '责任人',
   review_days INT NOT NULL DEFAULT 7 COMMENT '默认检视最近 N 天提交',
+  schedule_cron VARCHAR(128) DEFAULT NULL COMMENT '定时检视 Cron 表达式',
+  schedule_enabled TINYINT NOT NULL DEFAULT 0 COMMENT '是否启用定时检视',
   status TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1 启用，0 停用',
   remark VARCHAR(512) DEFAULT NULL COMMENT '备注',
   create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',

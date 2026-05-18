@@ -10,6 +10,8 @@ export interface Project {
   defaultBranch: string
   ownerName?: string
   reviewDays: number
+  scheduleCron?: string
+  scheduleEnabled?: number
   status: number
   remark?: string
 }
@@ -25,6 +27,8 @@ export interface ProjectForm {
   defaultBranch: string
   ownerName?: string
   reviewDays: number
+  scheduleCron?: string
+  scheduleEnabled?: number
   status?: number
   remark?: string
 }

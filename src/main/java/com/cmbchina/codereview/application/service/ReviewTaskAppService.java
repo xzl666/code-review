@@ -46,6 +46,15 @@ public class ReviewTaskAppService {
 
     @Transactional(rollbackFor = Exception.class)
     public ReviewTaskResponse manualStart(ManualReviewStartRequest request) {
+        return start(request, TriggerType.MANUAL.name());
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public ReviewTaskResponse scheduledStart(ManualReviewStartRequest request) {
+        return start(request, TriggerType.SCHEDULE.name());
+    }
+
+    private ReviewTaskResponse start(ManualReviewStartRequest request, String triggerType) {
         Project project = projectRepository.findById(request.getProjectId());
         if (project == null) {
             throw new BizException(ErrorCode.NOT_FOUND, "项目不存在");
@@ -54,7 +63,7 @@ public class ReviewTaskAppService {
         entity.setTaskNo(generateTaskNo());
         entity.setProjectId(project.getId());
         entity.setProjectName(project.getProjectName());
-        entity.setTriggerType(TriggerType.MANUAL.name());
+        entity.setTriggerType(triggerType);
         entity.setReviewBranch(defaultIfBlank(request.getBranch(), project.getDefaultBranch()));
         entity.setReviewDays(request.getReviewDays() == null ? project.getReviewDays() : request.getReviewDays());
         entity.setCommitCount(0);
