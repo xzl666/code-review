@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="page-stack">
     <section class="panel">
       <div class="panel-header">

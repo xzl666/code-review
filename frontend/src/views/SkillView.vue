@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="page-stack">
     <section class="toolbar">
       <div class="toolbar-title">
@@ -22,7 +22,7 @@
           <h2>Skill 列表</h2>
           <p>AI 规则通过 Skill 约束模型输出结构</p>
         </div>
-        <el-tag effect="plain">Total {{ total }}</el-tag>
+        <el-tag effect="plain">共 {{ total }} 条</el-tag>
       </div>
       <el-table v-loading="loading" :data="skills" stripe class="data-table">
         <el-table-column prop="skillName" label="名称" min-width="150" />

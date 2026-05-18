@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="page-stack">
     <section class="toolbar">
       <div class="toolbar-title">
@@ -23,7 +23,7 @@
           <h2>脚本列表</h2>
           <p>脚本需输出统一 JSON 问题结构，适合补充确定性检查</p>
         </div>
-        <el-tag effect="plain">Total {{ total }}</el-tag>
+        <el-tag effect="plain">共 {{ total }} 条</el-tag>
       </div>
       <el-table v-loading="loading" :data="scripts" stripe class="data-table">
         <el-table-column prop="scriptName" label="脚本名称" min-width="150" />

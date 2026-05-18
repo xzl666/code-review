@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="page-stack">
     <section class="toolbar">
       <div class="toolbar-title">
@@ -26,7 +26,7 @@
           <h2>任务列表</h2>
           <p>成功任务中的提示信息表示本次检视使用了限流或跳过策略</p>
         </div>
-        <el-tag effect="plain">Total {{ total }}</el-tag>
+        <el-tag effect="plain">共 {{ total }} 条</el-tag>
       </div>
       <el-table v-loading="loading" :data="tasks" stripe class="data-table">
         <el-table-column prop="taskNo" label="任务编号" min-width="180" show-overflow-tooltip />

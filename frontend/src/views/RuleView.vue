@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="page-stack">
     <section class="toolbar">
       <div class="toolbar-title">
@@ -27,7 +27,7 @@
           <h2>规则列表</h2>
           <p>启用规则会参与检视任务的执行链路</p>
         </div>
-        <el-tag effect="plain">Total {{ total }}</el-tag>
+        <el-tag effect="plain">共 {{ total }} 条</el-tag>
       </div>
       <el-table v-loading="loading" :data="rulesData" stripe class="data-table">
         <el-table-column prop="ruleName" label="规则名称" min-width="150" />

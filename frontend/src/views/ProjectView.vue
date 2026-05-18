@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="page-stack">
     <section class="toolbar project-toolbar">
       <div class="toolbar-title">
@@ -26,7 +26,7 @@
           <h2>项目列表</h2>
           <p>所有接入代码检视平台的 Gitee 仓库</p>
         </div>
-        <el-tag effect="plain">Total {{ total }}</el-tag>
+        <el-tag effect="plain">共 {{ total }} 条</el-tag>
       </div>
       <el-table v-loading="loading" :data="projects" stripe class="data-table">
         <el-table-column prop="projectName" label="项目名称" min-width="150" />

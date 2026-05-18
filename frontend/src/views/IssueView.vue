@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="page-stack">
     <section class="toolbar">
       <div class="toolbar-title">
@@ -35,7 +35,7 @@
           <h2>问题明细</h2>
           <p>行号为空表示模型或脚本未能定位到稳定行号</p>
         </div>
-        <el-tag effect="plain">Total {{ total }}</el-tag>
+        <el-tag effect="plain">共 {{ total }} 条</el-tag>
       </div>
       <el-table v-loading="loading" :data="issues" stripe class="data-table">
         <el-table-column prop="severity" label="严重度" width="100">
