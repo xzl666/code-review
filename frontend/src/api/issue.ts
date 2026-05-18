@@ -34,10 +34,18 @@ export function pageIssues(query: IssueQuery) {
   return post<PageResponse<ReviewIssue>>('/api/review-issue/page', query)
 }
 
+export function getIssue(id: number) {
+  return post<ReviewIssue>('/api/review-issue/detail', { id })
+}
+
 export function ignoreIssue(id: number) {
   return post<void>('/api/review-issue/ignore', { id })
 }
 
 export function markIssueFixed(id: number) {
   return post<void>('/api/review-issue/mark-fixed', { id })
+}
+
+export function exportIssues(query: IssueQuery) {
+  return post<string>('/api/review-issue/export', query)
 }

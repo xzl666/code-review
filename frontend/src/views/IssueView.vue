@@ -5,7 +5,14 @@
         <strong>问题列表</strong>
         <span>查看 AI 与脚本规则发现的问题，并完成处理闭环</span>
       </div>
+      <el-select v-model="query.projectId" clearable filterable placeholder="项目" class="toolbar-select">
+        <el-option v-for="project in projectOptions" :key="project.id" :label="project.projectName" :value="project.id" />
+      </el-select>
       <el-input-number v-model="query.taskId" :min="1" placeholder="任务 ID" class="toolbar-select" />
+      <el-select v-model="query.issueSource" clearable placeholder="来源" class="toolbar-select">
+        <el-option label="AI" value="AI" />
+        <el-option label="脚本" value="SCRIPT" />
+      </el-select>
       <el-select v-model="query.severity" clearable placeholder="严重度" class="toolbar-select">
         <el-option label="阻断" value="BLOCKER" />
         <el-option label="严重" value="CRITICAL" />
@@ -19,6 +26,7 @@
         <el-option label="已修复" value="FIXED" />
       </el-select>
       <el-button :icon="Search" @click="loadIssues">查询</el-button>
+      <el-button :icon="Download" @click="downloadExport">导出</el-button>
     </section>
 
     <section class="panel data-panel">
@@ -44,8 +52,9 @@
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">{{ statusText(row.status) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="150" fixed="right">
+        <el-table-column label="操作" width="210" fixed="right">
           <template #default="{ row }">
+            <el-button link type="primary" :icon="Eye" @click="openDetail(row.id)">详情</el-button>
             <el-button v-if="row.status === 'OPEN'" link type="warning" @click="ignore(row.id)">忽略</el-button>
             <el-button v-if="row.status === 'OPEN'" link type="success" @click="fixed(row.id)">修复</el-button>
           </template>
@@ -63,21 +72,45 @@
         />
       </div>
     </section>
+
+    <el-drawer v-model="detailVisible" title="问题详情" size="620px">
+      <div v-if="detail" class="detail-grid">
+        <div><span>问题 ID</span><strong>#{{ detail.id }}</strong></div>
+        <div><span>任务 ID</span><strong>#{{ detail.taskId }}</strong></div>
+        <div><span>来源</span><strong>{{ detail.issueSource }}</strong></div>
+        <div><span>严重度</span><el-tag :type="severityType(detail.severity)">{{ severityText(detail.severity) }}</el-tag></div>
+        <div><span>状态</span><strong>{{ statusText(detail.status) }}</strong></div>
+        <div><span>问题类型</span><strong>{{ detail.issueType || '-' }}</strong></div>
+        <div class="detail-full"><span>文件</span><strong>{{ detail.filePath }}</strong></div>
+        <div><span>起始行</span><strong>{{ lineText(detail.startLine) }}</strong></div>
+        <div><span>结束行</span><strong>{{ lineText(detail.endLine) }}</strong></div>
+        <div class="detail-full"><span>摘要</span><pre>{{ detail.summary || '-' }}</pre></div>
+        <div class="detail-full"><span>详情</span><pre>{{ detail.detail || '-' }}</pre></div>
+        <div class="detail-full"><span>修复建议</span><pre>{{ detail.suggestion || '-' }}</pre></div>
+        <div class="detail-full"><span>代码片段</span><pre>{{ detail.codeSnippet || '-' }}</pre></div>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Search } from 'lucide-vue-next'
-import { ignoreIssue, markIssueFixed, pageIssues, type ReviewIssue } from '@/api/issue'
+import { Download, Eye, Search } from 'lucide-vue-next'
+import { pageProjects, type Project } from '@/api/project'
+import { exportIssues, getIssue, ignoreIssue, markIssueFixed, pageIssues, type ReviewIssue } from '@/api/issue'
 
 const loading = ref(false)
+const detailVisible = ref(false)
 const issues = ref<ReviewIssue[]>([])
+const detail = ref<ReviewIssue>()
+const projectOptions = ref<Project[]>([])
 const total = ref(0)
 
 const query = reactive({
   taskId: undefined as number | undefined,
+  projectId: undefined as number | undefined,
+  issueSource: '',
   severity: '',
   status: 'OPEN',
   pageNo: 1,
@@ -87,18 +120,22 @@ const query = reactive({
 async function loadIssues() {
   loading.value = true
   try {
-    const page = await pageIssues({
-      taskId: query.taskId,
-      severity: query.severity || undefined,
-      status: query.status || undefined,
-      pageNo: query.pageNo,
-      pageSize: query.pageSize
-    })
+    const page = await pageIssues(currentQuery())
     issues.value = page.records
     total.value = page.total
   } finally {
     loading.value = false
   }
+}
+
+async function loadProjects() {
+  const page = await pageProjects({ status: 1, pageNo: 1, pageSize: 200 })
+  projectOptions.value = page.records
+}
+
+async function openDetail(id: number) {
+  detail.value = await getIssue(id)
+  detailVisible.value = true
 }
 
 async function ignore(id: number) {
@@ -111,6 +148,29 @@ async function fixed(id: number) {
   await markIssueFixed(id)
   ElMessage.success('问题已标记修复')
   await loadIssues()
+}
+
+async function downloadExport() {
+  const content = await exportIssues(currentQuery())
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `review-issues-${Date.now()}.csv`
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+function currentQuery() {
+  return {
+    taskId: query.taskId,
+    projectId: query.projectId,
+    issueSource: query.issueSource || undefined,
+    severity: query.severity || undefined,
+    status: query.status || undefined,
+    pageNo: query.pageNo,
+    pageSize: query.pageSize
+  }
 }
 
 function severityText(severity: string) {
@@ -155,5 +215,8 @@ function lineText(line?: number) {
   return line && line > 0 ? line : '-'
 }
 
-onMounted(loadIssues)
+onMounted(() => {
+  loadProjects()
+  loadIssues()
+})
 </script>

@@ -109,7 +109,12 @@ public class DeepSeekClient {
         prompt = prompt.replace("${branch}", value(branch));
         prompt = prompt.replace("${reviewDays}", String.valueOf(reviewDays));
         prompt = prompt.replace("${diffContent}", value(chunk.getContent()));
-        return prompt + "\n\nFile: " + chunk.getFilePath() + "\nDiff:\n" + chunk.getContent();
+        return prompt
+            + "\n\nFile: " + chunk.getFilePath()
+            + "\nChunkIndex: " + chunk.getChunkIndex()
+            + "\nOldStartLine: " + value(chunk.getOldStartLine())
+            + "\nNewStartLine: " + value(chunk.getNewStartLine())
+            + "\nDiff:\n" + chunk.getContent();
     }
 
     private List<Map<String, Object>> tools(AiSkillEntity skill) throws Exception {
@@ -151,6 +156,10 @@ public class DeepSeekClient {
 
     private String value(String value) {
         return value == null ? "" : value;
+    }
+
+    private String value(Integer value) {
+        return value == null ? "" : String.valueOf(value);
     }
 
     private String normalizeChatCompletionsUrl(String url) {

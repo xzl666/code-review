@@ -16,6 +16,7 @@ import com.cmbchina.codereview.interfaces.dto.request.ManualReviewStartRequest;
 import com.cmbchina.codereview.interfaces.dto.request.ReviewTaskPageRequest;
 import com.cmbchina.codereview.interfaces.dto.response.ReviewTaskResponse;
 import com.cmbchina.codereview.interfaces.dto.response.ReviewTaskStatisticsResponse;
+import javax.annotation.PostConstruct;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -116,6 +117,18 @@ public class ReviewTaskAppService {
         response.setSuccessTasks(count(ReviewTaskStatus.SUCCESS.name()));
         response.setFailedTasks(count(ReviewTaskStatus.FAILED.name()));
         return response;
+    }
+
+    @PostConstruct
+    public void recoverStaleRunningTasks() {
+        LocalDateTime timeoutBefore = LocalDateTime.now().minusHours(2);
+        LambdaUpdateWrapper<ReviewTaskEntity> wrapper = new LambdaUpdateWrapper<ReviewTaskEntity>()
+            .eq(ReviewTaskEntity::getStatus, ReviewTaskStatus.RUNNING.name())
+            .lt(ReviewTaskEntity::getStartTime, timeoutBefore)
+            .set(ReviewTaskEntity::getStatus, ReviewTaskStatus.FAILED.name())
+            .set(ReviewTaskEntity::getEndTime, LocalDateTime.now())
+            .set(ReviewTaskEntity::getErrorMessage, "任务运行超时，系统启动时自动关闭");
+        reviewTaskMapper.update(null, wrapper);
     }
 
     private Long count(String status) {

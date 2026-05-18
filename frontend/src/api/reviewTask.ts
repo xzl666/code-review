@@ -26,13 +26,28 @@ export interface ReviewTask {
 export interface ReviewTaskQuery {
   pageNo: number
   pageSize: number
+  projectId?: number
   projectName?: string
   status?: string
   triggerType?: string
 }
 
+export interface ManualReviewStartRequest {
+  projectId: number
+  branch?: string
+  reviewDays?: number
+}
+
 export function pageReviewTasks(query: ReviewTaskQuery) {
   return post<PageResponse<ReviewTask>>('/api/review-task/page', query)
+}
+
+export function startReviewTask(data: ManualReviewStartRequest) {
+  return post<ReviewTask>('/api/review-task/manual-start', data)
+}
+
+export function getReviewTask(id: number) {
+  return post<ReviewTask>('/api/review-task/detail', { id })
 }
 
 export function cancelReviewTask(id: number) {
