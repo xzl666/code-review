@@ -179,6 +179,29 @@ CREATE TABLE IF NOT EXISTS cr_notify_template (
   KEY idx_event_type (event_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='通知模板表';
 
+CREATE TABLE IF NOT EXISTS cr_notify_delivery_log (
+  id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+  config_id BIGINT DEFAULT NULL COMMENT '通知配置 ID',
+  task_id BIGINT DEFAULT NULL COMMENT '检视任务 ID',
+  task_no VARCHAR(64) DEFAULT NULL COMMENT '检视任务编号',
+  event_type VARCHAR(64) NOT NULL COMMENT '事件类型',
+  channel_type VARCHAR(32) NOT NULL COMMENT '渠道类型',
+  webhook_url VARCHAR(1024) NOT NULL COMMENT 'Webhook 地址',
+  request_content MEDIUMTEXT COMMENT '请求内容',
+  response_content MEDIUMTEXT COMMENT '响应内容',
+  status VARCHAR(32) NOT NULL COMMENT '投递状态：PENDING/SUCCESS/FAILED',
+  retry_count INT NOT NULL DEFAULT 0 COMMENT '重试次数',
+  next_retry_time DATETIME DEFAULT NULL COMMENT '下次重试时间',
+  last_error TEXT COMMENT '最近错误',
+  create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  deleted TINYINT NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+  PRIMARY KEY (id),
+  KEY idx_status_retry (status, next_retry_time),
+  KEY idx_task (task_id),
+  KEY idx_config (config_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='通知投递日志表';
+
 CREATE TABLE IF NOT EXISTS cr_system_config (
   id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
   config_key VARCHAR(128) NOT NULL COMMENT '配置 Key',
