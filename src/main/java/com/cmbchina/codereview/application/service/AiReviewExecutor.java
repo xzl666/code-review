@@ -1,7 +1,6 @@
 package com.cmbchina.codereview.application.service;
 
 import com.cmbchina.codereview.common.enums.IssueSource;
-import com.cmbchina.codereview.common.enums.ReviewIssueStatus;
 import com.cmbchina.codereview.common.exception.BizException;
 import com.cmbchina.codereview.common.exception.ErrorCode;
 import com.cmbchina.codereview.domain.project.Project;
@@ -11,8 +10,7 @@ import com.cmbchina.codereview.infrastructure.persistence.entity.AiSkillEntity;
 import com.cmbchina.codereview.infrastructure.persistence.entity.ReviewIssueEntity;
 import com.cmbchina.codereview.infrastructure.persistence.entity.ReviewRuleEntity;
 import com.cmbchina.codereview.infrastructure.persistence.mapper.ReviewIssueMapper;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.List;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -22,14 +20,14 @@ public class AiReviewExecutor {
 
     private final ReviewIssueMapper reviewIssueMapper;
 
-    private final ObjectMapper objectMapper;
+    private final ReviewIssuePayloadParser reviewIssuePayloadParser;
 
     public AiReviewExecutor(DeepSeekClient deepSeekClient,
                             ReviewIssueMapper reviewIssueMapper,
-                            ObjectMapper objectMapper) {
+                            ReviewIssuePayloadParser reviewIssuePayloadParser) {
         this.deepSeekClient = deepSeekClient;
         this.reviewIssueMapper = reviewIssueMapper;
-        this.objectMapper = objectMapper;
+        this.reviewIssuePayloadParser = reviewIssuePayloadParser;
     }
 
     public int execute(Long taskId,
@@ -50,101 +48,21 @@ public class AiReviewExecutor {
                            DiffChunk chunk,
                            String arguments) {
         try {
-            JsonNode root = objectMapper.readTree(arguments);
-            JsonNode issues = root.isArray() ? root : root.get("issues");
-            if (issues == null || !issues.isArray()) {
-                return 0;
-            }
-            int count = 0;
-            for (JsonNode issue : issues) {
-                ReviewIssueEntity entity = new ReviewIssueEntity();
-                entity.setTaskId(taskId);
-                entity.setProjectId(project.getId());
-                entity.setRuleId(rule.getId());
-                entity.setSkillId(skill.getId());
-                entity.setIssueSource(IssueSource.AI.name());
-                entity.setSeverity(normalizeSeverity(text(issue, "severity", rule.getSeverity()), rule.getSeverity()));
-                entity.setIssueType(text(issue, "issueType", rule.getRuleType()));
-                entity.setFilePath(firstText(issue, chunk.getFilePath(), "filePath", "filename", "file"));
-                Integer startLine = normalizeLine(firstInteger(issue, null, "startLine", "line", "newLine"));
-                entity.setStartLine(startLine);
-                entity.setEndLine(normalizeLine(firstInteger(issue, startLine, "endLine", "lineEnd", "newEndLine")));
-                entity.setSummary(firstText(issue, rule.getRuleName(), "summary", "title", "message", "description"));
-                entity.setDetail(firstText(issue, "", "detail", "description", "message"));
-                entity.setSuggestion(firstText(issue, "", "suggestion", "suggestedFix", "fix", "recommendation"));
-                entity.setCodeSnippet(firstText(issue, "", "codeSnippet", "snippet"));
-                entity.setRawResponse(limit(arguments, 10000));
-                entity.setStatus(ReviewIssueStatus.OPEN.name());
+            List<ReviewIssueEntity> issues = reviewIssuePayloadParser.parse(
+                arguments,
+                taskId,
+                project,
+                rule,
+                skill.getId(),
+                IssueSource.AI,
+                chunk.getFilePath()
+            );
+            for (ReviewIssueEntity entity : issues) {
                 reviewIssueMapper.insert(entity);
-                count++;
             }
-            return count;
+            return issues.size();
         } catch (Exception exception) {
             throw new BizException(ErrorCode.BIZ_ERROR, "AI function arguments are not valid review issue JSON: " + exception.getMessage());
         }
-    }
-
-    private String text(JsonNode node, String field, String defaultValue) {
-        JsonNode value = node.get(field);
-        return value == null || value.isNull() ? defaultValue : value.asText();
-    }
-
-    private String firstText(JsonNode node, String defaultValue, String... fields) {
-        for (String field : fields) {
-            JsonNode value = node.get(field);
-            if (value != null && !value.isNull() && !value.asText().trim().isEmpty()) {
-                return value.asText();
-            }
-        }
-        return defaultValue;
-    }
-
-    private Integer integer(JsonNode node, String field, Integer defaultValue) {
-        JsonNode value = node.get(field);
-        if (value == null || !value.canConvertToInt()) {
-            return defaultValue;
-        }
-        return value.asInt();
-    }
-
-    private Integer firstInteger(JsonNode node, Integer defaultValue, String... fields) {
-        for (String field : fields) {
-            JsonNode value = node.get(field);
-            if (value != null && value.canConvertToInt()) {
-                return value.asInt();
-            }
-        }
-        return defaultValue;
-    }
-
-    private String limit(String value, int maxLength) {
-        if (value == null || value.length() <= maxLength) {
-            return value;
-        }
-        return value.substring(0, maxLength);
-    }
-
-    private String normalizeSeverity(String value, String defaultValue) {
-        if (value == null) {
-            return defaultValue;
-        }
-        String upper = value.toUpperCase();
-        if ("ERROR".equals(upper) || "HIGH".equals(upper)) {
-            return "MAJOR";
-        }
-        if ("WARNING".equals(upper) || "WARN".equals(upper) || "MEDIUM".equals(upper)) {
-            return "MINOR";
-        }
-        if ("LOW".equals(upper) || "NOTICE".equals(upper)) {
-            return "INFO";
-        }
-        if ("BLOCKER".equals(upper) || "CRITICAL".equals(upper) || "MAJOR".equals(upper) || "MINOR".equals(upper) || "INFO".equals(upper)) {
-            return upper;
-        }
-        return defaultValue;
-    }
-
-    private Integer normalizeLine(Integer value) {
-        return value == null || value < 1 ? null : value;
     }
 }
