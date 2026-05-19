@@ -45,6 +45,23 @@ export interface NotifyTestResult {
   responseBody: string
 }
 
+export interface NotifyDeliveryLog {
+  id: number
+  configId?: number
+  taskId?: number
+  taskNo?: string
+  eventType: string
+  channelType: string
+  webhookUrl: string
+  requestContent?: string
+  responseContent?: string
+  status: string
+  retryCount: number
+  nextRetryTime?: string
+  lastError?: string
+  createTime?: string
+}
+
 export function pageNotifyConfigs(query: { configName?: string; channelType?: string; enabled?: number; pageNo: number; pageSize: number }) {
   return post<PageResponse<NotifyConfig>>('/api/notify-config/page', query)
 }
@@ -99,4 +116,8 @@ export function disableNotifyTemplate(id: number) {
 
 export function previewNotifyTemplate(data: { templateId?: number; templateContent?: string; variables?: Record<string, unknown> }) {
   return post<{ content: string }>('/api/notify-template/preview', data)
+}
+
+export function pageNotifyDeliveryLogs(query: { taskNo?: string; eventType?: string; status?: string; pageNo: number; pageSize: number }) {
+  return post<PageResponse<NotifyDeliveryLog>>('/api/notify-delivery-log/page', query)
 }

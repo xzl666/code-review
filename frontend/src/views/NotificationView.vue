@@ -91,6 +91,57 @@
             />
           </div>
         </el-tab-pane>
+
+        <el-tab-pane label="投递日志" name="log">
+          <div class="toolbar inline-toolbar">
+            <el-input v-model="logQuery.taskNo" clearable placeholder="任务编号" class="toolbar-input" />
+            <el-select v-model="logQuery.eventType" clearable placeholder="事件类型" class="toolbar-select">
+              <el-option label="任务成功" value="TASK_SUCCESS" />
+              <el-option label="任务失败" value="TASK_FAILED" />
+            </el-select>
+            <el-select v-model="logQuery.status" clearable placeholder="状态" class="toolbar-select">
+              <el-option label="待发送" value="PENDING" />
+              <el-option label="成功" value="SUCCESS" />
+              <el-option label="失败" value="FAILED" />
+            </el-select>
+            <el-button :icon="Search" @click="loadLogs">查询</el-button>
+          </div>
+          <el-table v-loading="logLoading" :data="logs" stripe class="data-table">
+            <el-table-column prop="taskNo" label="任务编号" min-width="150" show-overflow-tooltip />
+            <el-table-column prop="eventType" label="事件" width="120">
+              <template #default="{ row }">{{ eventText(row.eventType) }}</template>
+            </el-table-column>
+            <el-table-column prop="status" label="状态" width="100">
+              <template #default="{ row }">
+                <el-tag :type="logStatusType(row.status)">{{ logStatusText(row.status) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="retryCount" label="重试" width="80" />
+            <el-table-column prop="webhookUrl" label="Webhook URL" min-width="260" show-overflow-tooltip />
+            <el-table-column label="投递时间" width="170">
+              <template #default="{ row }">{{ formatTime(row.createTime) }}</template>
+            </el-table-column>
+            <el-table-column label="下次重试" width="170">
+              <template #default="{ row }">{{ formatTime(row.nextRetryTime) }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="120" fixed="right">
+              <template #default="{ row }">
+                <el-button link type="primary" :icon="Eye" @click="showLog(row)">详情</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <div class="pagination-row">
+            <el-pagination
+              v-model:current-page="logQuery.pageNo"
+              v-model:page-size="logQuery.pageSize"
+              :total="logTotal"
+              :page-sizes="[10, 20, 50]"
+              layout="total, sizes, prev, pager, next"
+              @size-change="loadLogs"
+              @current-change="loadLogs"
+            />
+          </div>
+        </el-tab-pane>
       </el-tabs>
     </section>
 
@@ -155,6 +206,7 @@ import {
   enableNotifyConfig,
   enableNotifyTemplate,
   pageNotifyConfigs,
+  pageNotifyDeliveryLogs,
   pageNotifyTemplates,
   previewNotifyTemplate,
   testSendNotifyConfig,
@@ -162,6 +214,7 @@ import {
   updateNotifyTemplate,
   type NotifyConfig,
   type NotifyConfigForm,
+  type NotifyDeliveryLog,
   type NotifyTemplate,
   type NotifyTemplateForm
 } from '@/api/notification'
@@ -169,6 +222,7 @@ import {
 const activeTab = ref('config')
 const configLoading = ref(false)
 const templateLoading = ref(false)
+const logLoading = ref(false)
 const configSaving = ref(false)
 const templateSaving = ref(false)
 const configDialogVisible = ref(false)
@@ -181,11 +235,14 @@ const configFormRef = ref<FormInstance>()
 const templateFormRef = ref<FormInstance>()
 const configs = ref<NotifyConfig[]>([])
 const templates = ref<NotifyTemplate[]>([])
+const logs = ref<NotifyDeliveryLog[]>([])
 const configTotal = ref(0)
 const templateTotal = ref(0)
+const logTotal = ref(0)
 
 const configQuery = reactive({ configName: '', pageNo: 1, pageSize: 10 })
 const templateQuery = reactive({ templateName: '', eventType: '', pageNo: 1, pageSize: 10 })
+const logQuery = reactive({ taskNo: '', eventType: '', status: '', pageNo: 1, pageSize: 10 })
 
 const configForm = reactive<NotifyConfigForm>({
   configName: '',
@@ -250,8 +307,31 @@ async function loadTemplates() {
   }
 }
 
+async function loadLogs() {
+  logLoading.value = true
+  try {
+    const page = await pageNotifyDeliveryLogs({
+      taskNo: logQuery.taskNo || undefined,
+      eventType: logQuery.eventType || undefined,
+      status: logQuery.status || undefined,
+      pageNo: logQuery.pageNo,
+      pageSize: logQuery.pageSize
+    })
+    logs.value = page.records
+    logTotal.value = page.total
+  } finally {
+    logLoading.value = false
+  }
+}
+
 function refreshActive() {
-  activeTab.value === 'config' ? loadConfigs() : loadTemplates()
+  if (activeTab.value === 'config') {
+    loadConfigs()
+  } else if (activeTab.value === 'template') {
+    loadTemplates()
+  } else {
+    loadLogs()
+  }
 }
 
 function openConfigCreate() {
@@ -357,6 +437,25 @@ async function previewTemplateForm() {
   resultVisible.value = true
 }
 
+function showLog(row: NotifyDeliveryLog) {
+  resultText.value = JSON.stringify(
+    {
+      id: row.id,
+      taskNo: row.taskNo,
+      event: eventText(row.eventType),
+      status: logStatusText(row.status),
+      retryCount: row.retryCount,
+      webhookUrl: row.webhookUrl,
+      requestContent: tryFormatJson(row.requestContent),
+      responseContent: row.responseContent || '',
+      lastError: row.lastError || ''
+    },
+    null,
+    2
+  )
+  resultVisible.value = true
+}
+
 async function setTemplateStatus(row: NotifyTemplate, enabled: boolean) {
   enabled ? await enableNotifyTemplate(row.id) : await disableNotifyTemplate(row.id)
   ElMessage.success(enabled ? '模板已启用' : '模板已停用')
@@ -384,8 +483,30 @@ function eventText(value: string) {
   return ({ TASK_SUCCESS: '任务成功', TASK_FAILED: '任务失败' } as Record<string, string>)[value] || value
 }
 
+function logStatusText(value: string) {
+  return ({ PENDING: '待发送', SUCCESS: '成功', FAILED: '失败' } as Record<string, string>)[value] || value
+}
+
+function logStatusType(value: string) {
+  return ({ PENDING: 'info', SUCCESS: 'success', FAILED: 'danger' } as Record<string, string>)[value] || 'info'
+}
+
+function formatTime(value?: string) {
+  return value ? value.replace('T', ' ') : '-'
+}
+
+function tryFormatJson(value?: string) {
+  if (!value) return ''
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2)
+  } catch {
+    return value
+  }
+}
+
 onMounted(() => {
   loadConfigs()
   loadTemplates()
+  loadLogs()
 })
 </script>
