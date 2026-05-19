@@ -17,7 +17,10 @@
           </div>
           <p>{{ gitee?.maskedToken || '优先读取 CODE_REVIEW_GITEE_TOKEN 环境变量' }}</p>
           <el-input v-model="giteeToken" type="password" show-password placeholder="写入数据库配置的 Gitee Token" />
-          <el-button type="primary" :loading="savingGitee" @click="saveGiteeToken">保存 Token</el-button>
+          <div class="setting-actions">
+            <el-button type="primary" :loading="savingGitee" @click="saveGiteeToken">保存 Token</el-button>
+            <el-button :loading="validatingGitee" @click="validateGiteeToken">验证配置</el-button>
+          </div>
         </div>
 
         <div class="setting-card">
@@ -29,7 +32,10 @@
           <el-input v-model="deepSeekForm.apiKey" type="password" show-password placeholder="API Key" />
           <el-input v-model="deepSeekForm.url" placeholder="Base URL 或 chat completions URL" />
           <el-input v-model="deepSeekForm.model" placeholder="模型名称" />
-          <el-button type="primary" :loading="savingDeepSeek" @click="saveDeepSeek">保存 DeepSeek 配置</el-button>
+          <div class="setting-actions">
+            <el-button type="primary" :loading="savingDeepSeek" @click="saveDeepSeek">保存 DeepSeek 配置</el-button>
+            <el-button :loading="validatingDeepSeek" @click="validateDeepSeek">验证配置</el-button>
+          </div>
         </div>
       </div>
     </section>
@@ -45,6 +51,9 @@ import {
   getDefaultGiteeToken,
   updateDeepSeekConfig,
   updateDefaultGiteeToken,
+  validateDeepSeekConfig,
+  validateDefaultGiteeToken,
+  type ConfigValidationResult,
   type DeepSeekConfig,
   type TokenDetail
 } from '@/api/systemConfig'
@@ -54,6 +63,8 @@ const deepSeek = ref<DeepSeekConfig>()
 const giteeToken = ref('')
 const savingGitee = ref(false)
 const savingDeepSeek = ref(false)
+const validatingGitee = ref(false)
+const validatingDeepSeek = ref(false)
 
 const deepSeekForm = reactive({
   apiKey: '',
@@ -99,6 +110,34 @@ async function saveDeepSeek() {
   } finally {
     savingDeepSeek.value = false
   }
+}
+
+async function validateGiteeToken() {
+  validatingGitee.value = true
+  try {
+    showValidationMessage(await validateDefaultGiteeToken())
+  } finally {
+    validatingGitee.value = false
+  }
+}
+
+async function validateDeepSeek() {
+  validatingDeepSeek.value = true
+  try {
+    showValidationMessage(await validateDeepSeekConfig())
+  } finally {
+    validatingDeepSeek.value = false
+  }
+}
+
+function showValidationMessage(result: ConfigValidationResult) {
+  const status = result.statusCode ? `HTTP ${result.statusCode}` : ''
+  const message = [result.message, status].filter(Boolean).join('，')
+  if (result.success) {
+    ElMessage.success(message)
+    return
+  }
+  ElMessage.error(message)
 }
 
 onMounted(loadConfig)

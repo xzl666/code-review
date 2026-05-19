@@ -463,6 +463,12 @@ body {
   word-break: break-all;
 }
 
+.setting-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .inline-toolbar {
   margin-bottom: 16px;
   padding: 0;
