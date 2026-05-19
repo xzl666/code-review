@@ -15,7 +15,7 @@ public class DeepSeekProperties {
     @Value("${code-review.ai.deepseek.model:${CODE_REVIEW_DEEPSEEK_MODEL:deepseek-v4-flash}}")
     private String model;
 
-    @Value("${code-review.ai.deepseek.timeout-seconds:${CODE_REVIEW_DEEPSEEK_TIMEOUT_SECONDS:60}}")
+    @Value("${code-review.ai.deepseek.timeout-seconds:${CODE_REVIEW_DEEPSEEK_TIMEOUT_SECONDS:120}}")
     private Integer timeoutSeconds;
 
     @Value("${code-review.ai.max-diff-chars-per-request:${CODE_REVIEW_AI_MAX_DIFF_CHARS:30000}}")

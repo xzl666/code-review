@@ -9,6 +9,7 @@ import com.cmbchina.codereview.infrastructure.persistence.entity.ReviewRuleEntit
 import com.cmbchina.codereview.domain.project.Project;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -19,6 +20,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.util.StringUtils;
@@ -180,6 +182,8 @@ public class DeepSeekClient {
         int timeoutMillis = properties.getTimeoutSeconds() * 1000;
         factory.setConnectTimeout(timeoutMillis);
         factory.setReadTimeout(timeoutMillis);
-        return new RestTemplate(factory);
+        RestTemplate restTemplate = new RestTemplate(factory);
+        restTemplate.getMessageConverters().add(0, new StringHttpMessageConverter(StandardCharsets.UTF_8));
+        return restTemplate;
     }
 }

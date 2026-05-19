@@ -9,6 +9,7 @@ import com.cmbchina.codereview.interfaces.dto.response.AiGeneratedScriptResponse
 import com.cmbchina.codereview.interfaces.dto.response.AiGeneratedSkillResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -19,6 +20,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
@@ -71,6 +73,7 @@ public class AiDraftGenerationService {
             String content = chat(scriptSystemPrompt(), scriptUserPrompt(safeRequest), 2500);
             AiGeneratedScriptResponse response = objectMapper.readValue(extractJson(content), AiGeneratedScriptResponse.class);
             fillScriptDefaults(response, safeRequest);
+            normalizeScriptContent(response);
             validateScriptDraft(response);
             return response;
         } catch (BizException exception) {
@@ -106,7 +109,7 @@ public class AiDraftGenerationService {
     String scriptSystemPrompt() {
         return "你是代码检视平台的规则工程师，负责生成可直接保存到平台的脚本检视规则草稿。"
             + "必须只返回一个 JSON 对象，不要 Markdown，不要解释。"
-            + "脚本语言仅允许 NODE，脚本必须从 stdin 读取 JSON 输入，不能访问网络、不能启动子进程、不能读取本地仓库文件。"
+            + "脚本语言仅允许 NODE，脚本必须使用 fs.readFileSync(0, 'utf8') 从 stdin 读取 JSON 输入，不能使用 /dev/stdin，不能访问网络、不能启动子进程、不能读取本地仓库文件。"
             + "平台输入 JSON 包含 projectName、projectType、branch、reviewDays、diffContent、filePaths。"
             + "脚本输出必须是 JSON 字符串，格式为 {\"issues\": []}。"
             + "issues 中每个问题字段必须包含 issueType、severity、filePath、startLine、endLine、summary、detail、suggestion、codeSnippet。"
@@ -224,6 +227,22 @@ public class AiDraftGenerationService {
         response.setParameterTemplate(value(response.getParameterTemplate(), "stdin JSON：projectName、projectType、branch、reviewDays、diffContent、filePaths"));
     }
 
+    private void normalizeScriptContent(AiGeneratedScriptResponse response) {
+        String scriptContent = response.getScriptContent();
+        if (!StringUtils.hasText(scriptContent)) {
+            return;
+        }
+        scriptContent = scriptContent
+            .replace("fs.readFileSync('/dev/stdin', 'utf8')", "fs.readFileSync(0, 'utf8')")
+            .replace("fs.readFileSync(\"/dev/stdin\", \"utf8\")", "fs.readFileSync(0, 'utf8')")
+            .replace("fs.readFileSync('/dev/stdin')", "fs.readFileSync(0, 'utf8')")
+            .replace("fs.readFileSync(\"/dev/stdin\")", "fs.readFileSync(0, 'utf8')");
+        if (scriptContent.contains("fs.readFileSync") && !scriptContent.contains("require('fs')") && !scriptContent.contains("require(\"fs\")")) {
+            scriptContent = "const fs = require('fs');\n" + scriptContent;
+        }
+        response.setScriptContent(scriptContent);
+    }
+
     private void fillSkillDefaults(AiGeneratedSkillResponse response, AiGenerateSkillRequest request) {
         response.setFunctionName(value(response.getFunctionName(), "submit_review_issues"));
         response.setVersion(value(response.getVersion(), "1.0.0"));
@@ -288,6 +307,8 @@ public class AiDraftGenerationService {
         int timeoutMillis = properties.getTimeoutSeconds() * 1000;
         factory.setConnectTimeout(timeoutMillis);
         factory.setReadTimeout(timeoutMillis);
-        return new RestTemplate(factory);
+        RestTemplate restTemplate = new RestTemplate(factory);
+        restTemplate.getMessageConverters().add(0, new StringHttpMessageConverter(StandardCharsets.UTF_8));
+        return restTemplate;
     }
 }
