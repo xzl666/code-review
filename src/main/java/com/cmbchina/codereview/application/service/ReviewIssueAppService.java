@@ -102,12 +102,28 @@ public class ReviewIssueAppService {
     }
 
     private LambdaQueryWrapper<ReviewIssueEntity> queryWrapper(ReviewIssuePageRequest request) {
-        return new LambdaQueryWrapper<ReviewIssueEntity>()
-            .eq(request.getTaskId() != null, ReviewIssueEntity::getTaskId, request.getTaskId())
+        LambdaQueryWrapper<ReviewIssueEntity> wrapper = new LambdaQueryWrapper<ReviewIssueEntity>()
             .eq(request.getProjectId() != null, ReviewIssueEntity::getProjectId, request.getProjectId())
             .eq(StringUtils.hasText(request.getSeverity()), ReviewIssueEntity::getSeverity, request.getSeverity())
             .eq(StringUtils.hasText(request.getIssueSource()), ReviewIssueEntity::getIssueSource, request.getIssueSource())
             .eq(StringUtils.hasText(request.getStatus()), ReviewIssueEntity::getStatus, request.getStatus());
+        if (request.getTaskId() != null) {
+            wrapper.eq(ReviewIssueEntity::getTaskId, request.getTaskId());
+            return wrapper;
+        }
+        if (StringUtils.hasText(request.getTaskNo())) {
+            List<Long> taskIds = reviewTaskMapper.selectList(new LambdaQueryWrapper<ReviewTaskEntity>()
+                    .like(ReviewTaskEntity::getTaskNo, request.getTaskNo()))
+                .stream()
+                .map(ReviewTaskEntity::getId)
+                .collect(Collectors.toList());
+            if (taskIds.isEmpty()) {
+                wrapper.eq(ReviewIssueEntity::getTaskId, -1L);
+            } else {
+                wrapper.in(ReviewIssueEntity::getTaskId, taskIds);
+            }
+        }
+        return wrapper;
     }
 
     private void updateStatus(Long id, String status) {

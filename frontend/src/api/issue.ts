@@ -26,6 +26,7 @@ export interface IssueQuery {
   pageNo: number
   pageSize: number
   taskId?: number
+  taskNo?: string
   projectId?: number
   severity?: string
   issueSource?: string

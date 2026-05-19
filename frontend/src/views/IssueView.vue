@@ -8,6 +8,14 @@
       <el-select v-model="query.projectId" clearable filterable placeholder="项目" class="toolbar-select">
         <el-option v-for="project in projectOptions" :key="project.id" :label="project.projectName" :value="project.id" />
       </el-select>
+      <el-input
+        v-model="taskKeyword"
+        clearable
+        placeholder="检视任务编号"
+        class="toolbar-input"
+        @input="handleTaskKeywordInput"
+        @keyup.enter="searchIssues"
+      />
       <el-select v-model="query.issueSource" clearable placeholder="来源" class="toolbar-select">
         <el-option label="AI" value="AI" />
         <el-option label="脚本" value="SCRIPT" />
@@ -24,7 +32,7 @@
         <el-option label="已忽略" value="IGNORED" />
         <el-option label="已修复" value="FIXED" />
       </el-select>
-      <el-button :icon="Search" @click="loadIssues">查询</el-button>
+      <el-button :icon="Search" @click="searchIssues">查询</el-button>
       <el-button :icon="Download" @click="downloadExport">导出</el-button>
       <el-tag v-if="query.taskId" closable effect="plain" @close="clearTaskFilter">任务 #{{ query.taskId }}</el-tag>
     </section>
@@ -117,6 +125,7 @@ const issues = ref<ReviewIssue[]>([])
 const detail = ref<ReviewIssue>()
 const projectOptions = ref<Project[]>([])
 const total = ref(0)
+const taskKeyword = ref('')
 const route = useRoute()
 const router = useRouter()
 
@@ -139,6 +148,19 @@ async function loadIssues() {
   } finally {
     loading.value = false
   }
+}
+
+function searchIssues() {
+  query.pageNo = 1
+  loadIssues()
+}
+
+function handleTaskKeywordInput() {
+  if (!query.taskId || taskKeyword.value.trim() === String(query.taskId)) {
+    return
+  }
+  query.taskId = undefined
+  router.replace({ path: '/issues', query: {} })
 }
 
 async function loadProjects() {
@@ -175,8 +197,11 @@ async function downloadExport() {
 }
 
 function currentQuery() {
+  const keyword = taskKeyword.value.trim()
+  const keywordTaskId = /^\d+$/.test(keyword) ? Number(keyword) : undefined
   return {
-    taskId: query.taskId,
+    taskId: query.taskId || keywordTaskId,
+    taskNo: !keywordTaskId && keyword ? keyword : undefined,
     projectId: query.projectId,
     issueSource: query.issueSource || undefined,
     severity: query.severity || undefined,
@@ -231,6 +256,7 @@ function lineText(line?: number) {
 function applyRouteQuery() {
   const taskId = Number(route.query.taskId)
   query.taskId = Number.isFinite(taskId) && taskId > 0 ? taskId : undefined
+  taskKeyword.value = query.taskId ? String(query.taskId) : ''
   if (query.taskId) {
     query.projectId = undefined
     query.issueSource = ''
@@ -241,6 +267,7 @@ function applyRouteQuery() {
 
 function clearTaskFilter() {
   query.taskId = undefined
+  taskKeyword.value = ''
   query.pageNo = 1
   router.replace({ path: '/issues', query: {} })
   loadIssues()

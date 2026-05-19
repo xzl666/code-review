@@ -9,6 +9,8 @@ public class ReviewIssuePageRequest extends PageRequest {
 
     private Long taskId;
 
+    private String taskNo;
+
     private Long projectId;
 
     private String severity;
