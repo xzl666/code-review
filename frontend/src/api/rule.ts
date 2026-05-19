@@ -40,6 +40,29 @@ export interface RuleQuery {
   pageSize: number
 }
 
+export interface AiGenerateScriptRequest {
+  requirement?: string
+  projectType?: string
+  ruleType?: string
+  severity?: string
+  scriptLanguage?: string
+}
+
+export interface AiGeneratedScriptDraft {
+  scriptName: string
+  scriptCode: string
+  scriptLanguage: string
+  scriptContent: string
+  parameterTemplate?: string
+  timeoutSeconds: number
+  ruleName: string
+  ruleCode: string
+  ruleType: string
+  severity: string
+  projectType: string
+  promptTemplate?: string
+}
+
 export function pageRules(query: RuleQuery) {
   return post<PageResponse<Rule>>('/api/rule/page', query)
 }
@@ -64,6 +87,6 @@ export function disableRule(id: number) {
   return post<void>('/api/rule/disable', { id })
 }
 
-export function generateScriptDraft() {
-  return post<string>('/api/rule/generate-script')
+export function generateScriptDraft(data: AiGenerateScriptRequest) {
+  return post<AiGeneratedScriptDraft>('/api/rule/generate-script', data)
 }

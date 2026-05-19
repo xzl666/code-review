@@ -76,10 +76,19 @@
         <el-form-item label="函数描述">
           <el-input v-model="form.functionDescription" type="textarea" :rows="3" />
         </el-form-item>
+        <el-form-item label="AI 生成需求">
+          <el-input
+            v-model="aiRequirement"
+            type="textarea"
+            :rows="3"
+            placeholder="描述希望 Skill 约束的检视输出，例如：面向 Java Web 安全问题，返回文件、行号、中文摘要和修复建议"
+          />
+        </el-form-item>
         <el-form-item label="参数 Schema" prop="parametersSchema">
           <el-input v-model="form.parametersSchema" type="textarea" :rows="12" spellcheck="false" />
         </el-form-item>
         <el-form-item>
+          <el-button :loading="generating" @click="generateDraft">AI 生成 Skill</el-button>
           <el-button :icon="CheckCircle2" :loading="validating" @click="validateSchema">校验 Schema</el-button>
           <el-tag v-if="schemaResult" :type="schemaResult.valid ? 'success' : 'danger'">{{ schemaResult.message }}</el-tag>
         </el-form-item>
@@ -103,6 +112,7 @@ import {
   deleteSkill,
   disableSkill,
   enableSkill,
+  generateSkillDraft,
   pageSkills,
   updateSkill,
   validateSkillSchema,
@@ -138,12 +148,14 @@ const defaultSchema = JSON.stringify(
 const loading = ref(false)
 const saving = ref(false)
 const validating = ref(false)
+const generating = ref(false)
 const dialogVisible = ref(false)
 const editingId = ref<number>()
 const formRef = ref<FormInstance>()
 const skills = ref<Skill[]>([])
 const total = ref(0)
 const schemaResult = ref<{ valid: boolean; message: string }>()
+const aiRequirement = ref('')
 
 const query = reactive({
   skillName: '',
@@ -198,6 +210,7 @@ function resetForm() {
     version: '1.0.0',
     status: undefined
   })
+  aiRequirement.value = ''
 }
 
 function openCreate() {
@@ -209,7 +222,32 @@ function openEdit(row: Skill) {
   editingId.value = row.id
   schemaResult.value = undefined
   Object.assign(form, { ...row })
+  aiRequirement.value = row.functionDescription || row.skillName
   dialogVisible.value = true
+}
+
+async function generateDraft() {
+  generating.value = true
+  try {
+    const draft = await generateSkillDraft({
+      requirement: aiRequirement.value || form.functionDescription || form.skillName,
+      projectType: 'BACKEND',
+      ruleType: 'BUG',
+      severity: 'MAJOR'
+    })
+    Object.assign(form, {
+      skillName: draft.skillName,
+      skillCode: draft.skillCode,
+      functionName: draft.functionName,
+      functionDescription: draft.functionDescription,
+      parametersSchema: draft.parametersSchema,
+      version: draft.version || '1.0.0'
+    })
+    schemaResult.value = undefined
+    ElMessage.success('AI 已生成 Skill 草稿')
+  } finally {
+    generating.value = false
+  }
 }
 
 async function validateSchema() {

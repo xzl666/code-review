@@ -115,9 +115,17 @@
         <el-form-item label="Prompt 模板">
           <el-input v-model="form.promptTemplate" type="textarea" :rows="7" />
         </el-form-item>
+        <el-form-item label="AI 生成需求">
+          <el-input
+            v-model="aiRequirement"
+            type="textarea"
+            :rows="3"
+            placeholder="描述希望检视的问题，例如：检查 Java Web Controller 是否缺少参数校验，并输出中文修复建议"
+          />
+        </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showGenerateTip">AI 生成脚本</el-button>
+        <el-button :loading="generating" @click="generateDraft">AI 生成草稿</el-button>
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="saving" @click="submitForm">保存</el-button>
       </template>
@@ -142,11 +150,12 @@ import {
   type Rule,
   type RuleForm
 } from '@/api/rule'
-import { pageScriptRules, type ScriptRule } from '@/api/scriptRule'
-import { pageSkills, type Skill } from '@/api/skill'
+import { createScriptRule, pageScriptRules, type ScriptRule } from '@/api/scriptRule'
+import { createSkill, generateSkillDraft, pageSkills, type Skill } from '@/api/skill'
 
 const loading = ref(false)
 const saving = ref(false)
+const generating = ref(false)
 const dialogVisible = ref(false)
 const editingId = ref<number>()
 const formRef = ref<FormInstance>()
@@ -154,6 +163,7 @@ const rulesData = ref<Rule[]>([])
 const total = ref(0)
 const skillOptions = ref<Skill[]>([])
 const scriptOptions = ref<ScriptRule[]>([])
+const aiRequirement = ref('')
 
 const query = reactive({
   ruleName: '',
@@ -240,6 +250,7 @@ function resetForm() {
     status: undefined,
     sortOrder: 0
   })
+  aiRequirement.value = ''
 }
 
 function resetBinding() {
@@ -257,6 +268,7 @@ async function openEdit(row: Rule) {
   await loadBindings()
   editingId.value = row.id
   Object.assign(form, { ...row })
+  aiRequirement.value = row.promptTemplate || row.ruleName
   dialogVisible.value = true
 }
 
@@ -301,11 +313,71 @@ async function removeRule(row: Rule) {
   await loadRules()
 }
 
-async function showGenerateTip() {
+async function generateDraft() {
+  generating.value = true
   try {
-    await generateScriptDraft()
-  } catch {
-    ElMessage.info('AI 生成脚本接口当前未启用，已记录在剩余工作清单中')
+    const requirement = aiRequirement.value || form.promptTemplate || form.ruleName
+    if (form.ruleKind === 'SCRIPT') {
+      const draft = await generateScriptDraft({
+        requirement,
+        projectType: form.projectType,
+        ruleType: form.ruleType,
+        severity: form.severity,
+        scriptLanguage: 'NODE'
+      })
+      const created = await createScriptRule({
+        scriptName: draft.scriptName,
+        scriptCode: draft.scriptCode,
+        scriptLanguage: draft.scriptLanguage,
+        scriptContent: draft.scriptContent,
+        parameterTemplate: draft.parameterTemplate,
+        timeoutSeconds: draft.timeoutSeconds || 20,
+        generatedByAi: 1,
+        status: 1
+      })
+      await loadBindings()
+      Object.assign(form, {
+        ruleName: draft.ruleName,
+        ruleCode: draft.ruleCode,
+        ruleType: draft.ruleType,
+        severity: draft.severity,
+        projectType: draft.projectType,
+        promptTemplate: draft.promptTemplate,
+        scriptId: created.id,
+        skillId: undefined
+      })
+      ElMessage.success('AI 已生成脚本并填充规则草稿')
+    } else {
+      const draft = await generateSkillDraft({
+        requirement,
+        projectType: form.projectType,
+        ruleType: form.ruleType,
+        severity: form.severity
+      })
+      const created = await createSkill({
+        skillName: draft.skillName,
+        skillCode: draft.skillCode,
+        functionName: draft.functionName,
+        functionDescription: draft.functionDescription,
+        parametersSchema: draft.parametersSchema,
+        version: draft.version,
+        status: 1
+      })
+      await loadBindings()
+      Object.assign(form, {
+        ruleName: draft.ruleName || draft.skillName,
+        ruleCode: draft.ruleCode || draft.skillCode,
+        ruleType: draft.ruleType || form.ruleType,
+        severity: draft.severity || form.severity,
+        projectType: draft.projectType || form.projectType,
+        promptTemplate: draft.promptTemplate,
+        skillId: created.id,
+        scriptId: undefined
+      })
+      ElMessage.success('AI 已生成 Skill 并填充规则草稿')
+    }
+  } finally {
+    generating.value = false
   }
 }
 

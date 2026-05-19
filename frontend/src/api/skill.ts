@@ -30,6 +30,28 @@ export interface SkillQuery {
   pageSize: number
 }
 
+export interface AiGenerateSkillRequest {
+  requirement?: string
+  projectType?: string
+  ruleType?: string
+  severity?: string
+}
+
+export interface AiGeneratedSkillDraft {
+  skillName: string
+  skillCode: string
+  functionName: string
+  functionDescription?: string
+  parametersSchema: string
+  version: string
+  ruleName?: string
+  ruleCode?: string
+  ruleType?: string
+  severity?: string
+  projectType?: string
+  promptTemplate?: string
+}
+
 export function pageSkills(query: SkillQuery) {
   return post<PageResponse<Skill>>('/api/skill/page', query)
 }
@@ -56,4 +78,8 @@ export function disableSkill(id: number) {
 
 export function validateSkillSchema(parametersSchema: string) {
   return post<{ valid: boolean; message: string }>('/api/skill/validate-schema', { parametersSchema })
+}
+
+export function generateSkillDraft(data: AiGenerateSkillRequest) {
+  return post<AiGeneratedSkillDraft>('/api/skill/generate', data)
 }

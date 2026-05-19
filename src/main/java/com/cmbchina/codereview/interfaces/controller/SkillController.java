@@ -1,13 +1,16 @@
 package com.cmbchina.codereview.interfaces.controller;
 
+import com.cmbchina.codereview.application.service.AiDraftGenerationService;
 import com.cmbchina.codereview.application.service.SkillAppService;
 import com.cmbchina.codereview.common.response.ApiResponse;
 import com.cmbchina.codereview.common.response.PageResponse;
+import com.cmbchina.codereview.interfaces.dto.request.AiGenerateSkillRequest;
 import com.cmbchina.codereview.interfaces.dto.request.IdRequest;
 import com.cmbchina.codereview.interfaces.dto.request.SkillCreateRequest;
 import com.cmbchina.codereview.interfaces.dto.request.SkillPageRequest;
 import com.cmbchina.codereview.interfaces.dto.request.SkillUpdateRequest;
 import com.cmbchina.codereview.interfaces.dto.request.ValidateSchemaRequest;
+import com.cmbchina.codereview.interfaces.dto.response.AiGeneratedSkillResponse;
 import com.cmbchina.codereview.interfaces.dto.response.IdResponse;
 import com.cmbchina.codereview.interfaces.dto.response.SchemaValidateResponse;
 import com.cmbchina.codereview.interfaces.dto.response.SkillResponse;
@@ -23,8 +26,12 @@ public class SkillController {
 
     private final SkillAppService skillAppService;
 
-    public SkillController(SkillAppService skillAppService) {
+    private final AiDraftGenerationService aiDraftGenerationService;
+
+    public SkillController(SkillAppService skillAppService,
+                           AiDraftGenerationService aiDraftGenerationService) {
         this.skillAppService = skillAppService;
+        this.aiDraftGenerationService = aiDraftGenerationService;
     }
 
     @PostMapping("/create")
@@ -69,5 +76,10 @@ public class SkillController {
     @PostMapping("/validate-schema")
     public ApiResponse<SchemaValidateResponse> validateSchema(@Valid @RequestBody ValidateSchemaRequest request) {
         return ApiResponse.success(skillAppService.validateSchema(request));
+    }
+
+    @PostMapping("/generate")
+    public ApiResponse<AiGeneratedSkillResponse> generate(@RequestBody AiGenerateSkillRequest request) {
+        return ApiResponse.success(aiDraftGenerationService.generateSkill(request));
     }
 }

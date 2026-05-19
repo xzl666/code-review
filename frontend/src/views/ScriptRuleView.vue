@@ -80,12 +80,21 @@
         <el-form-item label="参数模板">
           <el-input v-model="form.parameterTemplate" type="textarea" :rows="3" />
         </el-form-item>
+        <el-form-item label="AI 生成需求">
+          <el-input
+            v-model="aiRequirement"
+            type="textarea"
+            :rows="3"
+            placeholder="描述希望脚本检查的问题，例如：检查 Java Controller 是否直接返回异常堆栈"
+          />
+        </el-form-item>
         <el-form-item label="脚本内容" prop="scriptContent">
           <el-input v-model="form.scriptContent" type="textarea" :rows="14" spellcheck="false" />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button :loading="generating" @click="generateDraft">AI 生成脚本</el-button>
         <el-button :icon="PlayCircle" @click="testCurrentForm">测试当前脚本</el-button>
         <el-button type="primary" :loading="saving" @click="submitForm">保存</el-button>
       </template>
@@ -132,6 +141,7 @@ import {
   type ScriptRuleForm,
   type ScriptTestRunResponse
 } from '@/api/scriptRule'
+import { generateScriptDraft } from '@/api/rule'
 
 const samples: Record<string, string> = {
   SHELL: 'echo "{\\"issues\\":[]}"',
@@ -142,6 +152,7 @@ const samples: Record<string, string> = {
 const loading = ref(false)
 const saving = ref(false)
 const testing = ref(false)
+const generating = ref(false)
 const dialogVisible = ref(false)
 const testVisible = ref(false)
 const editingId = ref<number>()
@@ -151,6 +162,7 @@ const scripts = ref<ScriptRule[]>([])
 const total = ref(0)
 const testInput = ref('{"diffContent": ""}')
 const testResult = ref<ScriptTestRunResponse>()
+const aiRequirement = ref('')
 
 const query = reactive({
   scriptName: '',
@@ -212,6 +224,7 @@ function resetForm() {
     generatedByAi: 0,
     status: undefined
   })
+  aiRequirement.value = ''
 }
 
 function resetContentForLanguage() {
@@ -226,7 +239,33 @@ function openCreate() {
 function openEdit(row: ScriptRule) {
   editingId.value = row.id
   Object.assign(form, { ...row })
+  aiRequirement.value = row.parameterTemplate || row.scriptName
   dialogVisible.value = true
+}
+
+async function generateDraft() {
+  generating.value = true
+  try {
+    const draft = await generateScriptDraft({
+      requirement: aiRequirement.value || form.parameterTemplate || form.scriptName,
+      projectType: 'BACKEND',
+      ruleType: 'BUG',
+      severity: 'MAJOR',
+      scriptLanguage: 'NODE'
+    })
+    Object.assign(form, {
+      scriptName: draft.scriptName,
+      scriptCode: draft.scriptCode,
+      scriptLanguage: draft.scriptLanguage,
+      scriptContent: draft.scriptContent,
+      parameterTemplate: draft.parameterTemplate,
+      timeoutSeconds: draft.timeoutSeconds || 20,
+      generatedByAi: 1
+    })
+    ElMessage.success('AI 已生成脚本草稿')
+  } finally {
+    generating.value = false
+  }
 }
 
 async function submitForm() {
