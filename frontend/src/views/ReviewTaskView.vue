@@ -92,6 +92,9 @@
     </el-dialog>
 
     <el-drawer v-model="detailVisible" title="任务详情" size="560px">
+      <div v-if="detail && isFinished(detail)" class="drawer-actions">
+        <el-button type="primary" :icon="ListChecks" @click="viewTaskIssues(detail)">查看本次问题</el-button>
+      </div>
       <div v-if="detail" class="detail-grid">
         <div><span>任务编号</span><strong>{{ detail.taskNo }}</strong></div>
         <div><span>项目</span><strong>{{ detail.projectName }}</strong></div>
@@ -113,9 +116,10 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
-import { Eye, Plus, RefreshCw, Search } from 'lucide-vue-next'
+import { Eye, ListChecks, Plus, RefreshCw, Search } from 'lucide-vue-next'
 import { pageProjects, type Project } from '@/api/project'
 import {
   cancelReviewTask,
@@ -135,6 +139,7 @@ const tasks = ref<ReviewTask[]>([])
 const detail = ref<ReviewTask>()
 const total = ref(0)
 const projectOptions = ref<Project[]>([])
+const router = useRouter()
 let refreshTimer: number | undefined
 
 const query = reactive({
@@ -213,6 +218,11 @@ async function openDetail(id: number) {
   detailVisible.value = true
 }
 
+function viewTaskIssues(task: ReviewTask) {
+  detailVisible.value = false
+  router.push({ path: '/issues', query: { taskId: String(task.id) } })
+}
+
 async function cancelTask(id: number) {
   await cancelReviewTask(id)
   ElMessage.success('任务已取消')
@@ -243,6 +253,10 @@ function statusType(status: string) {
 
 function hasSkipped(task: ReviewTask) {
   return (task.skippedCommitCount || 0) > 0 || (task.skippedFileCount || 0) > 0
+}
+
+function isFinished(task: ReviewTask) {
+  return ['SUCCESS', 'FAILED', 'CANCELED'].includes(task.status)
 }
 
 onMounted(() => {

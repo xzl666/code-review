@@ -10,6 +10,8 @@ public class ReviewIssueResponse {
 
     private Long taskId;
 
+    private String taskNo;
+
     private Long projectId;
 
     private Long ruleId;

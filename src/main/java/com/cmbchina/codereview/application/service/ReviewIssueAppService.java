@@ -8,7 +8,9 @@ import com.cmbchina.codereview.common.exception.BizException;
 import com.cmbchina.codereview.common.exception.ErrorCode;
 import com.cmbchina.codereview.common.response.PageResponse;
 import com.cmbchina.codereview.infrastructure.persistence.entity.ReviewIssueEntity;
+import com.cmbchina.codereview.infrastructure.persistence.entity.ReviewTaskEntity;
 import com.cmbchina.codereview.infrastructure.persistence.mapper.ReviewIssueMapper;
+import com.cmbchina.codereview.infrastructure.persistence.mapper.ReviewTaskMapper;
 import com.cmbchina.codereview.interfaces.dto.request.ReviewIssuePageRequest;
 import com.cmbchina.codereview.interfaces.dto.response.ReviewIssueResponse;
 import com.cmbchina.codereview.interfaces.dto.response.ReviewIssueStatisticsResponse;
@@ -23,8 +25,12 @@ public class ReviewIssueAppService {
 
     private final ReviewIssueMapper reviewIssueMapper;
 
-    public ReviewIssueAppService(ReviewIssueMapper reviewIssueMapper) {
+    private final ReviewTaskMapper reviewTaskMapper;
+
+    public ReviewIssueAppService(ReviewIssueMapper reviewIssueMapper,
+                                 ReviewTaskMapper reviewTaskMapper) {
         this.reviewIssueMapper = reviewIssueMapper;
+        this.reviewTaskMapper = reviewTaskMapper;
     }
 
     public PageResponse<ReviewIssueResponse> page(ReviewIssuePageRequest request) {
@@ -68,10 +74,11 @@ public class ReviewIssueAppService {
     public String export(ReviewIssuePageRequest request) {
         List<ReviewIssueResponse> records = page(request).getRecords();
         StringBuilder builder = new StringBuilder();
-        builder.append("id,taskId,projectId,severity,status,filePath,startLine,endLine,summary\n");
+        builder.append("id,taskId,taskNo,projectId,severity,status,filePath,startLine,endLine,summary\n");
         for (ReviewIssueResponse issue : records) {
             builder.append(issue.getId()).append(',')
                 .append(issue.getTaskId()).append(',')
+                .append(escape(issue.getTaskNo())).append(',')
                 .append(issue.getProjectId()).append(',')
                 .append(issue.getSeverity()).append(',')
                 .append(issue.getStatus()).append(',')
@@ -123,6 +130,7 @@ public class ReviewIssueAppService {
         ReviewIssueResponse response = new ReviewIssueResponse();
         response.setId(entity.getId());
         response.setTaskId(entity.getTaskId());
+        response.setTaskNo(taskNo(entity.getTaskId()));
         response.setProjectId(entity.getProjectId());
         response.setRuleId(entity.getRuleId());
         response.setSkillId(entity.getSkillId());
@@ -140,6 +148,14 @@ public class ReviewIssueAppService {
         response.setStatus(entity.getStatus());
         response.setCreateTime(entity.getCreateTime());
         return response;
+    }
+
+    private String taskNo(Long taskId) {
+        if (taskId == null) {
+            return null;
+        }
+        ReviewTaskEntity task = reviewTaskMapper.selectById(taskId);
+        return task == null ? null : task.getTaskNo();
     }
 
     private String escape(String value) {

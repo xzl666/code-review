@@ -488,6 +488,12 @@ body {
   gap: 12px;
 }
 
+.drawer-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
 .detail-grid > div {
   display: flex;
   flex-direction: column;

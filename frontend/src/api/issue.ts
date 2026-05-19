@@ -3,6 +3,7 @@ import { post, type PageResponse } from './http'
 export interface ReviewIssue {
   id: number
   taskId: number
+  taskNo?: string
   projectId: number
   ruleId?: number
   skillId?: number

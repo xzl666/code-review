@@ -26,6 +26,7 @@
       </el-select>
       <el-button :icon="Search" @click="loadIssues">查询</el-button>
       <el-button :icon="Download" @click="downloadExport">导出</el-button>
+      <el-tag v-if="query.taskId" closable effect="plain" @close="clearTaskFilter">任务 #{{ query.taskId }}</el-tag>
     </section>
 
     <section class="panel data-panel">
@@ -43,6 +44,9 @@
           </template>
         </el-table-column>
         <el-table-column prop="issueSource" label="来源" width="90" />
+        <el-table-column label="检视任务" width="180" show-overflow-tooltip>
+          <template #default="{ row }">{{ taskText(row) }}</template>
+        </el-table-column>
         <el-table-column prop="summary" label="摘要" min-width="220" show-overflow-tooltip />
         <el-table-column prop="filePath" label="文件" min-width="260" show-overflow-tooltip />
         <el-table-column label="起始行" width="90">
@@ -81,7 +85,7 @@
     <el-drawer v-model="detailVisible" title="问题详情" size="620px">
       <div v-if="detail" class="detail-grid">
         <div><span>问题 ID</span><strong>#{{ detail.id }}</strong></div>
-        <div><span>任务 ID</span><strong>#{{ detail.taskId }}</strong></div>
+        <div><span>检视任务</span><strong>{{ taskText(detail) }}</strong></div>
         <div><span>来源</span><strong>{{ detail.issueSource }}</strong></div>
         <div><span>严重度</span><el-tag :type="severityType(detail.severity)">{{ severityText(detail.severity) }}</el-tag></div>
         <div><span>状态</span><strong>{{ statusText(detail.status) }}</strong></div>
@@ -100,7 +104,8 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Download, Eye, Search } from 'lucide-vue-next'
 import { pageProjects, type Project } from '@/api/project'
@@ -112,8 +117,11 @@ const issues = ref<ReviewIssue[]>([])
 const detail = ref<ReviewIssue>()
 const projectOptions = ref<Project[]>([])
 const total = ref(0)
+const route = useRoute()
+const router = useRouter()
 
 const query = reactive({
+  taskId: undefined as number | undefined,
   projectId: undefined as number | undefined,
   issueSource: '',
   severity: '',
@@ -168,6 +176,7 @@ async function downloadExport() {
 
 function currentQuery() {
   return {
+    taskId: query.taskId,
     projectId: query.projectId,
     issueSource: query.issueSource || undefined,
     severity: query.severity || undefined,
@@ -219,12 +228,44 @@ function lineText(line?: number) {
   return line && line > 0 ? line : '-'
 }
 
+function applyRouteQuery() {
+  const taskId = Number(route.query.taskId)
+  query.taskId = Number.isFinite(taskId) && taskId > 0 ? taskId : undefined
+  if (query.taskId) {
+    query.projectId = undefined
+    query.issueSource = ''
+    query.severity = ''
+    query.status = typeof route.query.status === 'string' ? route.query.status : ''
+  }
+}
+
+function clearTaskFilter() {
+  query.taskId = undefined
+  query.pageNo = 1
+  router.replace({ path: '/issues', query: {} })
+  loadIssues()
+}
+
+function taskText(issue: ReviewIssue) {
+  return issue.taskNo ? `${issue.taskNo} (#${issue.taskId})` : `#${issue.taskId}`
+}
+
 function formatTime(value?: string) {
   return value ? value.replace('T', ' ') : '-'
 }
 
 onMounted(() => {
+  applyRouteQuery()
   loadProjects()
   loadIssues()
 })
+
+watch(
+  () => route.query.taskId,
+  () => {
+    applyRouteQuery()
+    query.pageNo = 1
+    loadIssues()
+  }
+)
 </script>
