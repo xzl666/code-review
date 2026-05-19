@@ -128,7 +128,8 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index.mjs'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index.mjs'
 import { Edit, Pause, Play, Plus, Search, Trash2 } from 'lucide-vue-next'
 import {
   createRule,

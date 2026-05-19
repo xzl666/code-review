@@ -1,14 +1,15 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
-import DashboardView from '@/views/DashboardView.vue'
-import ProjectView from '@/views/ProjectView.vue'
-import RuleView from '@/views/RuleView.vue'
-import SkillView from '@/views/SkillView.vue'
-import ScriptRuleView from '@/views/ScriptRuleView.vue'
-import ReviewTaskView from '@/views/ReviewTaskView.vue'
-import IssueView from '@/views/IssueView.vue'
-import NotificationView from '@/views/NotificationView.vue'
-import SystemConfigView from '@/views/SystemConfigView.vue'
+
+const DashboardView = () => import('@/views/DashboardView.vue')
+const ProjectView = () => import('@/views/ProjectView.vue')
+const RuleView = () => import('@/views/RuleView.vue')
+const SkillView = () => import('@/views/SkillView.vue')
+const ScriptRuleView = () => import('@/views/ScriptRuleView.vue')
+const ReviewTaskView = () => import('@/views/ReviewTaskView.vue')
+const IssueView = () => import('@/views/IssueView.vue')
+const NotificationView = () => import('@/views/NotificationView.vue')
+const SystemConfigView = () => import('@/views/SystemConfigView.vue')
 
 export const routes: RouteRecordRaw[] = [
   {

@@ -114,7 +114,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index.mjs'
 import { Download, Eye, Search } from 'lucide-vue-next'
 import { pageProjects, type Project } from '@/api/project'
 import { exportIssues, getIssue, ignoreIssue, markIssueFixed, pageIssues, type ReviewIssue } from '@/api/issue'

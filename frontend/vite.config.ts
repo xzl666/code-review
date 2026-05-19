@@ -17,5 +17,17 @@ export default defineConfig({
         changeOrigin: true
       }
     }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vue: ['vue', 'vue-router'],
+          element: ['element-plus', '@element-plus/icons-vue'],
+          charts: ['echarts'],
+          icons: ['lucide-vue-next']
+        }
+      }
+    }
   }
 })

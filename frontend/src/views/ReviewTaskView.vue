@@ -118,7 +118,7 @@
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { FormInstance, FormRules } from 'element-plus'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index.mjs'
 import { Eye, ListChecks, Plus, RefreshCw, Search } from 'lucide-vue-next'
 import { pageProjects, type Project } from '@/api/project'
 import {

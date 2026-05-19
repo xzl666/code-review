@@ -43,10 +43,16 @@
 </template>
 
 <script setup lang="ts">
-import * as echarts from 'echarts'
+import { LineChart } from 'echarts/charts'
+import { GridComponent, TooltipComponent } from 'echarts/components'
+import * as echarts from 'echarts/core'
+import { CanvasRenderer } from 'echarts/renderers'
+import type { ECharts } from 'echarts/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Bot, FolderGit2, ListChecks, Workflow } from 'lucide-vue-next'
 import { getDashboardOverview, getIssueTrend, getSeverityDistribution, type NameValue } from '@/api/dashboard'
+
+echarts.use([LineChart, GridComponent, TooltipComponent, CanvasRenderer])
 
 const range = ref('7 天')
 const trendRef = ref<HTMLDivElement>()
@@ -62,7 +68,7 @@ const overview = ref({
 })
 const trend = ref<NameValue[]>([])
 const severityRows = ref<NameValue[]>([])
-let chart: echarts.ECharts | undefined
+let chart: ECharts | undefined
 
 const metrics = computed(() => [
   {
