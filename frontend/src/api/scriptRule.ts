@@ -38,6 +38,7 @@ export interface ScriptTestRunResponse {
   stdout: string
   stderr: string
   timeout: boolean
+  securityBlocked: boolean
 }
 
 export function pageScriptRules(query: ScriptRuleQuery) {

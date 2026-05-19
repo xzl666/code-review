@@ -103,6 +103,7 @@
       <div v-if="testResult" class="result-grid">
         <el-tag :type="testResult.success ? 'success' : 'danger'">{{ testResult.success ? '成功' : '失败' }}</el-tag>
         <el-tag v-if="testResult.timeout" type="danger">超时</el-tag>
+        <el-tag v-if="testResult.securityBlocked" type="warning">沙箱拦截</el-tag>
         <span>退出码：{{ testResult.exitCode ?? '-' }}</span>
         <h3>stdout</h3>
         <pre>{{ testResult.stdout || '-' }}</pre>

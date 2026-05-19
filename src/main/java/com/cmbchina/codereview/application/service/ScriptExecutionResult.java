@@ -1,9 +1,9 @@
-package com.cmbchina.codereview.interfaces.dto.response;
+package com.cmbchina.codereview.application.service;
 
 import lombok.Data;
 
 @Data
-public class ScriptTestRunResponse {
+public class ScriptExecutionResult {
 
     private Boolean success;
 

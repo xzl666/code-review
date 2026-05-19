@@ -10,17 +10,9 @@ import com.cmbchina.codereview.infrastructure.persistence.entity.ReviewRuleEntit
 import com.cmbchina.codereview.infrastructure.persistence.entity.ScriptRuleEntity;
 import com.cmbchina.codereview.infrastructure.persistence.mapper.ReviewIssueMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -33,12 +25,16 @@ public class ScriptReviewExecutor {
 
     private final ReviewIssuePayloadParser reviewIssuePayloadParser;
 
+    private final ScriptSandboxExecutor scriptSandboxExecutor;
+
     public ScriptReviewExecutor(ReviewIssueMapper reviewIssueMapper,
                                 ObjectMapper objectMapper,
-                                ReviewIssuePayloadParser reviewIssuePayloadParser) {
+                                ReviewIssuePayloadParser reviewIssuePayloadParser,
+                                ScriptSandboxExecutor scriptSandboxExecutor) {
         this.reviewIssueMapper = reviewIssueMapper;
         this.objectMapper = objectMapper;
         this.reviewIssuePayloadParser = reviewIssuePayloadParser;
+        this.scriptSandboxExecutor = scriptSandboxExecutor;
     }
 
     public int execute(Long taskId,
@@ -53,25 +49,23 @@ public class ScriptReviewExecutor {
 
     private String runScript(Project project, ScriptRuleEntity script, GitDiffSummary diffSummary, String branch) {
         try {
-            Path workDir = Files.createTempDirectory("code-review-engine-script-");
-            Path scriptPath = writeScript(workDir, script);
-            ProcessBuilder builder = new ProcessBuilder(command(script.getScriptLanguage(), scriptPath));
-            builder.directory(workDir.toFile());
-            Process process = builder.start();
-            process.getOutputStream().write(inputJson(project, diffSummary, branch).getBytes(StandardCharsets.UTF_8));
-            process.getOutputStream().close();
-            int timeout = script.getTimeoutSeconds() == null ? 30 : script.getTimeoutSeconds();
-            boolean finished = process.waitFor(timeout, TimeUnit.SECONDS);
-            if (!finished) {
-                process.destroyForcibly();
+            ScriptExecutionRequest request = new ScriptExecutionRequest();
+            request.setLanguage(script.getScriptLanguage());
+            request.setContent(script.getScriptContent());
+            request.setInputJson(inputJson(project, diffSummary, branch));
+            request.setTimeoutSeconds(script.getTimeoutSeconds());
+            request.setMaxOutputChars(200000);
+            ScriptExecutionResult result = scriptSandboxExecutor.execute(request);
+            if (Boolean.TRUE.equals(result.getTimeout())) {
                 throw new BizException(ErrorCode.BIZ_ERROR, "script execution timeout: " + script.getScriptName());
             }
-            String stdout = read(process.getInputStream());
-            String stderr = read(process.getErrorStream());
-            if (process.exitValue() != 0) {
-                throw new BizException(ErrorCode.BIZ_ERROR, "script execution failed: " + script.getScriptName() + "; " + stderr);
+            if (Boolean.TRUE.equals(result.getSecurityBlocked())) {
+                throw new BizException(ErrorCode.BIZ_ERROR, "script execution blocked by sandbox: " + script.getScriptName() + "; " + result.getStderr());
             }
-            return limit(stdout, 200000);
+            if (!Boolean.TRUE.equals(result.getSuccess())) {
+                throw new BizException(ErrorCode.BIZ_ERROR, "script execution failed: " + script.getScriptName() + "; " + result.getStderr());
+            }
+            return limit(result.getStdout(), 200000);
         } catch (BizException exception) {
             throw exception;
         } catch (Exception exception) {
@@ -115,37 +109,6 @@ public class ScriptReviewExecutor {
         input.put("filePaths", diffSummary.getFilePaths());
         input.put("diffContent", diffSummary.getDiffContent());
         return objectMapper.writeValueAsString(input);
-    }
-
-    private Path writeScript(Path workDir, ScriptRuleEntity script) throws Exception {
-        String suffix = "SHELL".equals(script.getScriptLanguage()) ? ".sh" : ("PYTHON".equals(script.getScriptLanguage()) ? ".py" : ".js");
-        Path scriptPath = workDir.resolve("script" + suffix);
-        Files.write(scriptPath, script.getScriptContent().getBytes(StandardCharsets.UTF_8));
-        return scriptPath;
-    }
-
-    private List<String> command(String language, Path scriptPath) {
-        if ("PYTHON".equals(language)) {
-            return Arrays.asList("python", scriptPath.toAbsolutePath().toString());
-        }
-        if ("NODE".equals(language)) {
-            return Arrays.asList("node", scriptPath.toAbsolutePath().toString());
-        }
-        if (File.separatorChar == '\\') {
-            return Arrays.asList("cmd", "/c", scriptPath.toAbsolutePath().toString());
-        }
-        return Arrays.asList("sh", scriptPath.toAbsolutePath().toString());
-    }
-
-    private String read(java.io.InputStream inputStream) throws Exception {
-        StringBuilder builder = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                builder.append(line).append('\n');
-            }
-        }
-        return builder.toString();
     }
 
     private String limit(String value, int maxLength) {

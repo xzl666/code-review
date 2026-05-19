@@ -15,15 +15,8 @@ import com.cmbchina.codereview.interfaces.dto.request.ScriptTestRunRequest;
 import com.cmbchina.codereview.interfaces.dto.request.ScriptUpdateRequest;
 import com.cmbchina.codereview.interfaces.dto.response.ScriptResponse;
 import com.cmbchina.codereview.interfaces.dto.response.ScriptTestRunResponse;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,8 +27,12 @@ public class ScriptRuleAppService {
 
     private final ScriptRuleMapper scriptRuleMapper;
 
-    public ScriptRuleAppService(ScriptRuleMapper scriptRuleMapper) {
+    private final ScriptSandboxExecutor scriptSandboxExecutor;
+
+    public ScriptRuleAppService(ScriptRuleMapper scriptRuleMapper,
+                                ScriptSandboxExecutor scriptSandboxExecutor) {
         this.scriptRuleMapper = scriptRuleMapper;
+        this.scriptSandboxExecutor = scriptSandboxExecutor;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -115,42 +112,13 @@ public class ScriptRuleAppService {
             language = normalizeLanguage(request.getScriptLanguage());
             content = request.getScriptContent();
         }
-        try {
-            Path workDir = Files.createTempDirectory("code-review-script-");
-            Path scriptPath = writeScript(workDir, language, content);
-            ProcessBuilder builder = new ProcessBuilder(command(language, scriptPath));
-            builder.directory(workDir.toFile());
-            builder.redirectErrorStream(false);
-            Process process = builder.start();
-            if (StringUtils.hasText(request.getInputJson())) {
-                process.getOutputStream().write(request.getInputJson().getBytes(StandardCharsets.UTF_8));
-            }
-            process.getOutputStream().close();
-            boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
-            ScriptTestRunResponse response = new ScriptTestRunResponse();
-            response.setTimeout(!finished);
-            if (!finished) {
-                process.destroyForcibly();
-                response.setSuccess(false);
-                response.setExitCode(null);
-                response.setStdout("");
-                response.setStderr("脚本执行超时");
-                return response;
-            }
-            response.setExitCode(process.exitValue());
-            response.setStdout(read(process.getInputStream()));
-            response.setStderr(read(process.getErrorStream()));
-            response.setSuccess(process.exitValue() == 0);
-            return response;
-        } catch (Exception exception) {
-            ScriptTestRunResponse response = new ScriptTestRunResponse();
-            response.setSuccess(false);
-            response.setTimeout(false);
-            response.setExitCode(null);
-            response.setStdout("");
-            response.setStderr(exception.getMessage());
-            return response;
-        }
+        ScriptExecutionRequest executionRequest = new ScriptExecutionRequest();
+        executionRequest.setLanguage(language);
+        executionRequest.setContent(content);
+        executionRequest.setInputJson(request.getInputJson());
+        executionRequest.setTimeoutSeconds(timeoutSeconds);
+        ScriptExecutionResult result = scriptSandboxExecutor.execute(executionRequest);
+        return toTestRunResponse(result);
     }
 
     private void updateStatus(Long id, Integer status) {
@@ -194,34 +162,14 @@ public class ScriptRuleAppService {
         return upper;
     }
 
-    private Path writeScript(Path workDir, String language, String content) throws Exception {
-        String suffix = "SHELL".equals(language) ? ".sh" : ("PYTHON".equals(language) ? ".py" : ".js");
-        Path scriptPath = workDir.resolve("script" + suffix);
-        Files.write(scriptPath, content.getBytes(StandardCharsets.UTF_8));
-        return scriptPath;
-    }
-
-    private List<String> command(String language, Path scriptPath) {
-        if ("PYTHON".equals(language)) {
-            return Arrays.asList("python", scriptPath.toAbsolutePath().toString());
-        }
-        if ("NODE".equals(language)) {
-            return Arrays.asList("node", scriptPath.toAbsolutePath().toString());
-        }
-        if (File.separatorChar == '\\') {
-            return Arrays.asList("cmd", "/c", scriptPath.toAbsolutePath().toString());
-        }
-        return Arrays.asList("sh", scriptPath.toAbsolutePath().toString());
-    }
-
-    private String read(java.io.InputStream inputStream) throws Exception {
-        StringBuilder builder = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                builder.append(line).append('\n');
-            }
-        }
-        return builder.toString();
+    private ScriptTestRunResponse toTestRunResponse(ScriptExecutionResult result) {
+        ScriptTestRunResponse response = new ScriptTestRunResponse();
+        response.setSuccess(result.getSuccess());
+        response.setExitCode(result.getExitCode());
+        response.setStdout(result.getStdout());
+        response.setStderr(result.getStderr());
+        response.setTimeout(result.getTimeout());
+        response.setSecurityBlocked(result.getSecurityBlocked());
+        return response;
     }
 }
