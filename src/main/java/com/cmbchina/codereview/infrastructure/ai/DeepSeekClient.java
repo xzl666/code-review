@@ -178,6 +178,7 @@ public class DeepSeekClient {
             + "DefaultSeverity: " + value(rule.getSeverity()) + "\n"
             + "FunctionName: " + value(skill.getFunctionName()) + "\n"
             + "FunctionSchema:\n" + objectMapper.writeValueAsString(strictParametersSchema(objectMapper.readTree(skill.getParametersSchema()))) + "\n"
+            + "ChangedNewLines:\n" + changedNewLines(chunk) + "\n"
             + "MalformedArguments:\n" + value(invalidArguments) + "\n"
             + "OriginalDiff:\n" + value(chunk.getContent());
         messages.add(message("user", prompt));
@@ -196,12 +197,56 @@ public class DeepSeekClient {
             + "\nReturn only through the provided function. Do not output Markdown, code fences, explanations or plain text."
             + "\nAll code, annotations such as @Valid, quotes, backslashes and newlines must be valid JSON string values with correct escaping."
             + "\nIf a line range can be located, fill startLine and endLine. If it is a single line issue, use the same value for both fields."
+            + "\nOnly report issues on changed new-file lines listed in ChangedNewLines. Do not report issues that appear only in unchanged context lines."
+            + "\nstartLine and endLine must be actual new-file line numbers from ChangedNewLines. If no changed line is relevant, return no issue."
             + "\nIf there are no issues, return {\"issues\":[]} through the function."
             + "\n\nFile: " + chunk.getFilePath()
             + "\nChunkIndex: " + chunk.getChunkIndex()
             + "\nOldStartLine: " + value(chunk.getOldStartLine())
             + "\nNewStartLine: " + value(chunk.getNewStartLine())
+            + "\nChangedNewLines:\n" + changedNewLines(chunk)
             + "\nDiff:\n" + chunk.getContent();
+    }
+
+    private String changedNewLines(DiffChunk chunk) {
+        if (chunk == null || !StringUtils.hasText(chunk.getContent())) {
+            return "";
+        }
+        int currentNewLine = chunk.getNewStartLine() == null ? 0 : chunk.getNewStartLine();
+        StringBuilder builder = new StringBuilder();
+        for (String line : chunk.getContent().split("\\R", -1)) {
+            if (line.startsWith("@@")) {
+                currentNewLine = parseNewStartLine(line, currentNewLine);
+                continue;
+            }
+            if (line.startsWith("---") || line.startsWith("+++")) {
+                continue;
+            }
+            if (line.startsWith("-")) {
+                continue;
+            }
+            if (line.startsWith("+")) {
+                builder.append(currentNewLine).append(": ").append(line).append('\n');
+            }
+            if (!line.startsWith("\\ No newline at end of file")) {
+                currentNewLine++;
+            }
+        }
+        return builder.toString();
+    }
+
+    private int parseNewStartLine(String hunkHeader, int fallback) {
+        int plusIndex = hunkHeader.indexOf('+');
+        if (plusIndex < 0) {
+            return fallback;
+        }
+        int index = plusIndex + 1;
+        StringBuilder number = new StringBuilder();
+        while (index < hunkHeader.length() && Character.isDigit(hunkHeader.charAt(index))) {
+            number.append(hunkHeader.charAt(index));
+            index++;
+        }
+        return number.length() == 0 ? fallback : Integer.parseInt(number.toString());
     }
 
     private List<Map<String, Object>> tools(AiSkillEntity skill) throws Exception {

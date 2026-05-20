@@ -21,7 +21,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.net.URLEncoder;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -165,13 +167,14 @@ public class ReviewIssueAppService {
         response.setSeverity(entity.getSeverity());
         response.setIssueType(entity.getIssueType());
         response.setFilePath(entity.getFilePath());
-        response.setStartLine(entity.getStartLine());
-        response.setEndLine(entity.getEndLine());
+        Integer displayStartLine = displayStartLine(entity);
+        response.setStartLine(displayStartLine);
+        response.setEndLine(displayEndLine(entity, displayStartLine));
         response.setSummary(entity.getSummary());
         response.setDetail(entity.getDetail());
         response.setSuggestion(entity.getSuggestion());
-        response.setCodeSnippet(codeSnippet(entity));
-        response.setCodeDetailUrl(codeDetailUrl(entity));
+        response.setCodeSnippet(codeSnippet(entity, displayStartLine));
+        response.setCodeDetailUrl(codeDetailUrl(entity, displayStartLine));
         response.setRawResponse(entity.getRawResponse());
         response.setStatus(entity.getStatus());
         response.setCreateTime(entity.getCreateTime());
@@ -186,7 +189,7 @@ public class ReviewIssueAppService {
         return task == null ? null : task.getTaskNo();
     }
 
-    private String codeDetailUrl(ReviewIssueEntity entity) {
+    private String codeDetailUrl(ReviewIssueEntity entity, Integer displayStartLine) {
         if (!StringUtils.hasText(entity.getFilePath())) {
             return "";
         }
@@ -211,8 +214,8 @@ public class ReviewIssueAppService {
             .append(encodePathSegment(branch))
             .append("/")
             .append(encodePath(entity.getFilePath()));
-        if (entity.getStartLine() != null && entity.getStartLine() > 0) {
-            url.append("#L").append(entity.getStartLine());
+        if (displayStartLine != null && displayStartLine > 0) {
+            url.append("#L").append(displayStartLine);
         }
         return url.toString();
     }
@@ -246,32 +249,25 @@ public class ReviewIssueAppService {
         }
     }
 
-    private String codeSnippet(ReviewIssueEntity entity) {
+    private String codeSnippet(ReviewIssueEntity entity, Integer displayStartLine) {
         if (StringUtils.hasText(entity.getCodeSnippet())) {
             return entity.getCodeSnippet();
         }
-        return codeSnippetFromLocalRepository(entity);
+        return codeSnippetFromLocalRepository(entity, displayStartLine);
     }
 
-    private String codeSnippetFromLocalRepository(ReviewIssueEntity entity) {
-        if (!StringUtils.hasText(entity.getFilePath()) || entity.getStartLine() == null || entity.getStartLine() < 1) {
+    private String codeSnippetFromLocalRepository(ReviewIssueEntity entity, Integer displayStartLine) {
+        if (!StringUtils.hasText(entity.getFilePath()) || displayStartLine == null || displayStartLine < 1) {
             return "";
         }
-        Project project = projectRepository.findById(entity.getProjectId());
-        if (project == null || !StringUtils.hasText(project.getProjectCode())) {
-            return "";
-        }
-        Path repoDir = Paths.get("target", "review-repos", safeName(project.getProjectCode() + "-" + project.getId()));
-        Path filePath = repoDir.resolve(entity.getFilePath()).normalize();
-        if (!filePath.startsWith(repoDir.normalize()) || !Files.exists(filePath) || !Files.isRegularFile(filePath)) {
+        Path filePath = localFilePath(entity);
+        if (filePath == null) {
             return "";
         }
         try {
             List<String> lines = Files.readAllLines(filePath, StandardCharsets.UTF_8);
-            int start = Math.max(entity.getStartLine() - 3, 1);
-            int end = entity.getEndLine() == null || entity.getEndLine() < entity.getStartLine()
-                ? entity.getStartLine()
-                : entity.getEndLine();
+            int start = Math.max(displayStartLine - 3, 1);
+            int end = displayEndLine(entity, displayStartLine);
             end = Math.min(end + 3, lines.size());
             StringBuilder builder = new StringBuilder();
             for (int lineNumber = start; lineNumber <= end; lineNumber++) {
@@ -284,6 +280,111 @@ public class ReviewIssueAppService {
         } catch (Exception ignored) {
             return "";
         }
+    }
+
+    private Integer displayStartLine(ReviewIssueEntity entity) {
+        Integer startLine = entity.getStartLine();
+        if (startLine == null || startLine < 1) {
+            return startLine;
+        }
+        Path filePath = localFilePath(entity);
+        if (filePath == null) {
+            return startLine;
+        }
+        try {
+            List<String> lines = Files.readAllLines(filePath, StandardCharsets.UTF_8);
+            String issueText = issueText(entity);
+            if (score(issueText, linesAround(lines, startLine, 3)) >= 2) {
+                return startLine;
+            }
+            int bestLine = startLine;
+            int bestScore = 0;
+            for (int index = 0; index < lines.size(); index++) {
+                int score = score(issueText, linesAround(lines, index + 1, 2));
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestLine = index + 1;
+                }
+            }
+            return bestScore >= 2 ? bestLine : startLine;
+        } catch (Exception ignored) {
+            return startLine;
+        }
+    }
+
+    private Integer displayEndLine(ReviewIssueEntity entity, Integer displayStartLine) {
+        if (displayStartLine == null || displayStartLine < 1) {
+            return displayStartLine;
+        }
+        Integer originalStart = entity.getStartLine();
+        Integer originalEnd = entity.getEndLine();
+        if (originalStart != null && originalEnd != null && originalEnd >= originalStart && originalStart.equals(displayStartLine)) {
+            return originalEnd;
+        }
+        return displayStartLine;
+    }
+
+    private Path localFilePath(ReviewIssueEntity entity) {
+        if (!StringUtils.hasText(entity.getFilePath())) {
+            return null;
+        }
+        Project project = projectRepository.findById(entity.getProjectId());
+        if (project == null || !StringUtils.hasText(project.getProjectCode())) {
+            return null;
+        }
+        Path repoDir = Paths.get("target", "review-repos", safeName(project.getProjectCode() + "-" + project.getId()));
+        Path filePath = repoDir.resolve(entity.getFilePath()).normalize();
+        if (!filePath.startsWith(repoDir.normalize()) || !Files.exists(filePath) || !Files.isRegularFile(filePath)) {
+            return null;
+        }
+        return filePath;
+    }
+
+    private String issueText(ReviewIssueEntity entity) {
+        return ((entity.getSummary() == null ? "" : entity.getSummary()) + " "
+            + (entity.getDetail() == null ? "" : entity.getDetail()) + " "
+            + (entity.getSuggestion() == null ? "" : entity.getSuggestion())).toLowerCase();
+    }
+
+    private String linesAround(List<String> lines, int lineNumber, int radius) {
+        int start = Math.max(1, lineNumber - radius);
+        int end = Math.min(lines.size(), lineNumber + radius);
+        StringBuilder builder = new StringBuilder();
+        for (int current = start; current <= end; current++) {
+            builder.append(lines.get(current - 1)).append('\n');
+        }
+        return builder.toString();
+    }
+
+    private int score(String issueText, String sourceText) {
+        int score = 0;
+        String lowerSource = sourceText.toLowerCase();
+        for (String token : tokens(issueText)) {
+            if (lowerSource.contains(token.toLowerCase())) {
+                score++;
+            }
+        }
+        return score;
+    }
+
+    private Set<String> tokens(String value) {
+        Set<String> tokens = new HashSet<>();
+        for (String token : value.split("[^A-Za-z0-9_]+")) {
+            if (token.length() >= 4 && !isCommonToken(token)) {
+                tokens.add(token);
+            }
+        }
+        return tokens;
+    }
+
+    private boolean isCommonToken(String token) {
+        String lower = token.toLowerCase();
+        return "null".equals(lower)
+            || "true".equals(lower)
+            || "false".equals(lower)
+            || "return".equals(lower)
+            || "public".equals(lower)
+            || "static".equals(lower);
     }
 
     private String safeName(String value) {
