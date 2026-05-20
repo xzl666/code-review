@@ -7,6 +7,7 @@ import { ElDrawer } from 'element-plus/es/components/drawer/index.mjs'
 import { ElForm, ElFormItem } from 'element-plus/es/components/form/index.mjs'
 import { ElInput } from 'element-plus/es/components/input/index.mjs'
 import { ElInputNumber } from 'element-plus/es/components/input-number/index.mjs'
+import { ElLoading } from 'element-plus/es/components/loading/index.mjs'
 import { ElMenu, ElMenuItem } from 'element-plus/es/components/menu/index.mjs'
 import { ElOption, ElSelect } from 'element-plus/es/components/select/index.mjs'
 import { ElPagination } from 'element-plus/es/components/pagination/index.mjs'
@@ -56,5 +57,7 @@ elementComponents.forEach((component) => {
 
 app
   .use(router)
+  .use(ElLoading)
+  .directive('loading', ElLoading.directive)
   .provide(localeContextKey, ref(zhCn))
   .mount('#app')

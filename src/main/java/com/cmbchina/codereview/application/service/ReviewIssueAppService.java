@@ -7,6 +7,8 @@ import com.cmbchina.codereview.common.enums.ReviewIssueStatus;
 import com.cmbchina.codereview.common.exception.BizException;
 import com.cmbchina.codereview.common.exception.ErrorCode;
 import com.cmbchina.codereview.common.response.PageResponse;
+import com.cmbchina.codereview.domain.project.Project;
+import com.cmbchina.codereview.domain.project.ProjectRepository;
 import com.cmbchina.codereview.infrastructure.persistence.entity.ReviewIssueEntity;
 import com.cmbchina.codereview.infrastructure.persistence.entity.ReviewTaskEntity;
 import com.cmbchina.codereview.infrastructure.persistence.mapper.ReviewIssueMapper;
@@ -14,6 +16,10 @@ import com.cmbchina.codereview.infrastructure.persistence.mapper.ReviewTaskMappe
 import com.cmbchina.codereview.interfaces.dto.request.ReviewIssuePageRequest;
 import com.cmbchina.codereview.interfaces.dto.response.ReviewIssueResponse;
 import com.cmbchina.codereview.interfaces.dto.response.ReviewIssueStatisticsResponse;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -27,10 +33,14 @@ public class ReviewIssueAppService {
 
     private final ReviewTaskMapper reviewTaskMapper;
 
+    private final ProjectRepository projectRepository;
+
     public ReviewIssueAppService(ReviewIssueMapper reviewIssueMapper,
-                                 ReviewTaskMapper reviewTaskMapper) {
+                                 ReviewTaskMapper reviewTaskMapper,
+                                 ProjectRepository projectRepository) {
         this.reviewIssueMapper = reviewIssueMapper;
         this.reviewTaskMapper = reviewTaskMapper;
+        this.projectRepository = projectRepository;
     }
 
     public PageResponse<ReviewIssueResponse> page(ReviewIssuePageRequest request) {
@@ -159,7 +169,7 @@ public class ReviewIssueAppService {
         response.setSummary(entity.getSummary());
         response.setDetail(entity.getDetail());
         response.setSuggestion(entity.getSuggestion());
-        response.setCodeSnippet(entity.getCodeSnippet());
+        response.setCodeSnippet(codeSnippet(entity));
         response.setRawResponse(entity.getRawResponse());
         response.setStatus(entity.getStatus());
         response.setCreateTime(entity.getCreateTime());
@@ -172,6 +182,50 @@ public class ReviewIssueAppService {
         }
         ReviewTaskEntity task = reviewTaskMapper.selectById(taskId);
         return task == null ? null : task.getTaskNo();
+    }
+
+    private String codeSnippet(ReviewIssueEntity entity) {
+        if (StringUtils.hasText(entity.getCodeSnippet())) {
+            return entity.getCodeSnippet();
+        }
+        return codeSnippetFromLocalRepository(entity);
+    }
+
+    private String codeSnippetFromLocalRepository(ReviewIssueEntity entity) {
+        if (!StringUtils.hasText(entity.getFilePath()) || entity.getStartLine() == null || entity.getStartLine() < 1) {
+            return "";
+        }
+        Project project = projectRepository.findById(entity.getProjectId());
+        if (project == null || !StringUtils.hasText(project.getProjectCode())) {
+            return "";
+        }
+        Path repoDir = Paths.get("target", "review-repos", safeName(project.getProjectCode() + "-" + project.getId()));
+        Path filePath = repoDir.resolve(entity.getFilePath()).normalize();
+        if (!filePath.startsWith(repoDir.normalize()) || !Files.exists(filePath) || !Files.isRegularFile(filePath)) {
+            return "";
+        }
+        try {
+            List<String> lines = Files.readAllLines(filePath, StandardCharsets.UTF_8);
+            int start = Math.max(entity.getStartLine() - 3, 1);
+            int end = entity.getEndLine() == null || entity.getEndLine() < entity.getStartLine()
+                ? entity.getStartLine()
+                : entity.getEndLine();
+            end = Math.min(end + 3, lines.size());
+            StringBuilder builder = new StringBuilder();
+            for (int lineNumber = start; lineNumber <= end; lineNumber++) {
+                if (builder.length() > 0) {
+                    builder.append(System.lineSeparator());
+                }
+                builder.append(String.format("%4d  %s", lineNumber, lines.get(lineNumber - 1)));
+            }
+            return builder.toString();
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private String safeName(String value) {
+        return value.replaceAll("[^a-zA-Z0-9._-]", "_");
     }
 
     private String escape(String value) {

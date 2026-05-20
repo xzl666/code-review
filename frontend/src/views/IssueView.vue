@@ -90,24 +90,58 @@
       </div>
     </section>
 
-    <el-drawer v-model="detailVisible" title="问题详情" size="620px">
-      <div v-if="detail" class="detail-grid">
-        <div><span>问题 ID</span><strong>#{{ detail.id }}</strong></div>
-        <div><span>检视任务</span><strong>{{ taskText(detail) }}</strong></div>
-        <div><span>来源</span><strong>{{ detail.issueSource }}</strong></div>
-        <div><span>严重度</span><el-tag :type="severityType(detail.severity)">{{ severityText(detail.severity) }}</el-tag></div>
-        <div><span>状态</span><strong>{{ statusText(detail.status) }}</strong></div>
-        <div><span>问题类型</span><strong>{{ detail.issueType || '-' }}</strong></div>
-        <div><span>检查时间</span><strong>{{ formatTime(detail.createTime) }}</strong></div>
-        <div class="detail-full"><span>文件</span><strong>{{ detail.filePath }}</strong></div>
-        <div><span>起始行</span><strong>{{ lineText(detail.startLine) }}</strong></div>
-        <div><span>结束行</span><strong>{{ lineText(detail.endLine) }}</strong></div>
-        <div class="detail-full"><span>摘要</span><pre>{{ detail.summary || '-' }}</pre></div>
-        <div class="detail-full"><span>详情</span><pre>{{ detail.detail || '-' }}</pre></div>
-        <div class="detail-full"><span>修复建议</span><pre>{{ detail.suggestion || '-' }}</pre></div>
-        <div class="detail-full"><span>代码片段</span><pre>{{ detail.codeSnippet || '-' }}</pre></div>
+    <el-dialog v-model="detailVisible" title="问题详情" width="880px" class="issue-detail-dialog" destroy-on-close>
+      <div v-if="detail" class="issue-detail">
+        <section class="detail-section detail-section-soft">
+          <div class="detail-section-title">
+            <strong>{{ detail.summary || '未命名问题' }}</strong>
+            <el-tag :type="severityType(detail.severity)">{{ severityText(detail.severity) }}</el-tag>
+          </div>
+          <div class="detail-meta-grid">
+            <div><span>问题 ID</span><strong>#{{ detail.id }}</strong></div>
+            <div><span>检视任务</span><strong>{{ taskText(detail) }}</strong></div>
+            <div><span>来源</span><strong>{{ detail.issueSource }}</strong></div>
+            <div><span>状态</span><strong>{{ statusText(detail.status) }}</strong></div>
+            <div><span>问题类型</span><strong>{{ detail.issueType || '-' }}</strong></div>
+            <div><span>检查时间</span><strong>{{ formatTime(detail.createTime) }}</strong></div>
+          </div>
+        </section>
+
+        <section class="detail-section detail-section-file">
+          <div class="detail-section-title">
+            <strong>定位信息</strong>
+          </div>
+          <div class="detail-location">
+            <div><span>文件</span><strong>{{ detail.filePath || '-' }}</strong></div>
+            <div><span>起始行</span><strong>{{ lineText(detail.startLine) }}</strong></div>
+            <div><span>结束行</span><strong>{{ lineText(detail.endLine) }}</strong></div>
+          </div>
+        </section>
+
+        <section class="detail-section detail-section-info">
+          <div class="detail-section-title">
+            <strong>问题说明</strong>
+          </div>
+          <pre class="detail-text">{{ detail.detail || '-' }}</pre>
+        </section>
+
+        <section class="detail-section detail-section-fix">
+          <div class="detail-section-title">
+            <strong>修复建议</strong>
+          </div>
+          <pre class="detail-text">{{ detail.suggestion || '-' }}</pre>
+        </section>
+
+        <section class="detail-section detail-section-code">
+          <div class="detail-section-title">
+            <strong>代码片段</strong>
+            <span>{{ codeSnippetSource(detail) }}</span>
+          </div>
+          <pre v-if="displayCodeSnippet(detail)" class="detail-code">{{ displayCodeSnippet(detail) }}</pre>
+          <div v-else class="detail-empty">暂无代码片段，后续新生成的问题会优先从 diff 中补充代码上下文。</div>
+        </section>
       </div>
-    </el-drawer>
+    </el-dialog>
   </div>
 </template>
 
@@ -279,6 +313,40 @@ function taskText(issue: ReviewIssue) {
 
 function formatTime(value?: string) {
   return value ? value.replace('T', ' ') : '-'
+}
+
+function displayCodeSnippet(issue: ReviewIssue) {
+  if (issue.codeSnippet?.trim()) {
+    return issue.codeSnippet.trim()
+  }
+  return snippetFromRawResponse(issue.rawResponse)
+}
+
+function codeSnippetSource(issue: ReviewIssue) {
+  if (issue.codeSnippet?.trim()) {
+    return '来自代码上下文'
+  }
+  if (snippetFromRawResponse(issue.rawResponse)) {
+    return '来自模型原始返回'
+  }
+  return '暂无可用片段'
+}
+
+function snippetFromRawResponse(rawResponse?: string) {
+  if (!rawResponse?.trim()) {
+    return ''
+  }
+  try {
+    const payload = JSON.parse(rawResponse)
+    const issuesPayload = Array.isArray(payload) ? payload : payload.issues
+    if (!Array.isArray(issuesPayload)) {
+      return ''
+    }
+    const snippet = issuesPayload.find((item) => typeof item?.codeSnippet === 'string' && item.codeSnippet.trim())?.codeSnippet
+    return typeof snippet === 'string' ? snippet.trim() : ''
+  } catch {
+    return ''
+  }
 }
 
 onMounted(() => {
