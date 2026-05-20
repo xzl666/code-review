@@ -16,7 +16,7 @@ export interface PageResponse<T> {
 
 const http = axios.create({
   baseURL: '',
-  timeout: 60000,
+  timeout: 130000,
   headers: {
     'Content-Type': 'application/json'
   }

@@ -249,7 +249,7 @@ async function generateDraft() {
     const draft = await generateScriptDraft({
       requirement: aiRequirement.value || form.parameterTemplate || form.scriptName,
       projectType: 'BACKEND',
-      ruleType: 'BUG',
+      ruleType: 'CUSTOM',
       severity: 'MAJOR',
       scriptLanguage: 'NODE'
     })

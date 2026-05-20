@@ -232,7 +232,7 @@ async function generateDraft() {
     const draft = await generateSkillDraft({
       requirement: aiRequirement.value || form.functionDescription || form.skillName,
       projectType: 'BACKEND',
-      ruleType: 'BUG',
+      ruleType: 'CUSTOM',
       severity: 'MAJOR'
     })
     Object.assign(form, {
