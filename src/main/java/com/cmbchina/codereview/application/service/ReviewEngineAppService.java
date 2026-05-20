@@ -27,6 +27,7 @@ import com.cmbchina.codereview.infrastructure.persistence.mapper.ScriptRuleMappe
 import com.cmbchina.codereview.infrastructure.persistence.mapper.ReviewTaskMapper;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executor;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -104,10 +105,10 @@ public class ReviewEngineAppService {
             String branch = defaultIfBlank(task.getReviewBranch(), project.getDefaultBranch());
             Path repoDir = localRepositoryManager.prepare(project, branch, resolveToken(project));
             GitDiffSummary diffSummary = gitDiffService.summarize(repoDir, task.getReviewDays());
-            int aiCallCount = executeAiRules(taskId, project, diffSummary, branch, task.getReviewDays());
+            AiRuleExecutionResult aiRuleResult = executeAiRules(taskId, project, diffSummary, branch, task.getReviewDays());
             executeScriptRules(taskId, project, diffSummary, branch);
             TaskIssueCounters counters = countIssues(taskId);
-            markSuccess(taskId, diffSummary, counters, aiCallCount);
+            markSuccess(taskId, diffSummary, counters, aiRuleResult);
             notificationDispatchService.notifyTaskSuccess(reviewTaskMapper.selectById(taskId));
         } catch (Exception exception) {
             markFailed(taskId, exception.getMessage());
@@ -147,7 +148,8 @@ public class ReviewEngineAppService {
         }
     }
 
-    private int executeAiRules(Long taskId, Project project, GitDiffSummary diffSummary, String branch, Integer reviewDays) {
+    private AiRuleExecutionResult executeAiRules(Long taskId, Project project, GitDiffSummary diffSummary, String branch, Integer reviewDays) {
+        AiRuleExecutionResult result = new AiRuleExecutionResult();
         LambdaQueryWrapper<ReviewRuleEntity> wrapper = new LambdaQueryWrapper<ReviewRuleEntity>()
             .eq(ReviewRuleEntity::getStatus, BaseStatus.ENABLED.getValue())
             .eq(ReviewRuleEntity::getRuleKind, RuleKind.AI.name())
@@ -158,17 +160,16 @@ public class ReviewEngineAppService {
             .orderByAsc(ReviewRuleEntity::getId);
         List<ReviewRuleEntity> rules = reviewRuleMapper.selectList(wrapper);
         if (rules.isEmpty()) {
-            return 0;
+            return result;
         }
         List<DiffChunk> chunks = diffChunkService.split(diffSummary, deepSeekProperties.getMaxDiffCharsPerRequest());
         if (chunks.isEmpty()) {
-            return 0;
+            return result;
         }
         if (deepSeekProperties.getMaxChunksPerTask() != null && deepSeekProperties.getMaxChunksPerTask() > 0
             && chunks.size() > deepSeekProperties.getMaxChunksPerTask()) {
             chunks = chunks.subList(0, deepSeekProperties.getMaxChunksPerTask());
         }
-        int aiCallCount = 0;
         for (ReviewRuleEntity rule : rules) {
             if (rule.getSkillId() == null) {
                 continue;
@@ -178,11 +179,19 @@ public class ReviewEngineAppService {
                 continue;
             }
             for (DiffChunk chunk : chunks) {
-                aiReviewExecutor.execute(taskId, project, rule, skill, chunk, branch, reviewDays);
-                aiCallCount++;
+                result.aiCallCount++;
+                try {
+                    aiReviewExecutor.execute(taskId, project, rule, skill, chunk, branch, reviewDays);
+                } catch (Exception exception) {
+                    result.warnings.add(limit("AI review skipped for rule " + rule.getId()
+                        + ", skill " + skill.getId()
+                        + ", file " + chunk.getFilePath()
+                        + ", chunk " + chunk.getChunkIndex()
+                        + ": " + exception.getMessage(), 500));
+                }
             }
         }
-        return aiCallCount;
+        return result;
     }
 
     private TaskIssueCounters countIssues(Long taskId) {
@@ -213,7 +222,7 @@ public class ReviewEngineAppService {
         reviewTaskMapper.update(null, wrapper);
     }
 
-    private void markSuccess(Long taskId, GitDiffSummary diffSummary, TaskIssueCounters counters, int aiCallCount) {
+    private void markSuccess(Long taskId, GitDiffSummary diffSummary, TaskIssueCounters counters, AiRuleExecutionResult aiRuleResult) {
         LambdaUpdateWrapper<ReviewTaskEntity> wrapper = new LambdaUpdateWrapper<ReviewTaskEntity>()
             .eq(ReviewTaskEntity::getId, taskId)
             .set(ReviewTaskEntity::getStatus, ReviewTaskStatus.SUCCESS.name())
@@ -225,11 +234,11 @@ public class ReviewEngineAppService {
             .set(ReviewTaskEntity::getMajorCount, counters.majorCount)
             .set(ReviewTaskEntity::getMinorCount, counters.minorCount)
             .set(ReviewTaskEntity::getInfoCount, counters.infoCount)
-            .set(ReviewTaskEntity::getAiCallCount, aiCallCount)
+            .set(ReviewTaskEntity::getAiCallCount, aiRuleResult.aiCallCount)
             .set(ReviewTaskEntity::getSkippedCommitCount, diffSummary.getSkippedCommitCount())
             .set(ReviewTaskEntity::getSkippedFileCount, diffSummary.getSkippedFileCount())
             .set(ReviewTaskEntity::getEndTime, LocalDateTime.now())
-            .set(ReviewTaskEntity::getWarningMessage, warningMessage(diffSummary))
+            .set(ReviewTaskEntity::getWarningMessage, warningMessage(diffSummary, aiRuleResult.warnings))
             .set(ReviewTaskEntity::getErrorMessage, null);
         reviewTaskMapper.update(null, wrapper);
     }
@@ -255,11 +264,23 @@ public class ReviewEngineAppService {
         return value.substring(0, maxLength);
     }
 
-    private String warningMessage(GitDiffSummary diffSummary) {
-        if (diffSummary.getWarnings() == null || diffSummary.getWarnings().isEmpty()) {
+    private String warningMessage(GitDiffSummary diffSummary, List<String> aiWarnings) {
+        List<String> warnings = new ArrayList<>();
+        if (diffSummary.getWarnings() != null && !diffSummary.getWarnings().isEmpty()) {
+            warnings.addAll(diffSummary.getWarnings());
+        }
+        if (aiWarnings != null && !aiWarnings.isEmpty()) {
+            warnings.addAll(aiWarnings);
+        }
+        if (warnings.isEmpty()) {
             return null;
         }
-        return limit(String.join(" ", diffSummary.getWarnings()), 1000);
+        return limit(String.join(" ", warnings), 1000);
+    }
+
+    private static class AiRuleExecutionResult {
+        private Integer aiCallCount = 0;
+        private List<String> warnings = new ArrayList<>();
     }
 
     private static class TaskIssueCounters {

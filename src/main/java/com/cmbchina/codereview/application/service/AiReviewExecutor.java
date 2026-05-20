@@ -38,7 +38,7 @@ public class AiReviewExecutor {
                        String branch,
                        Integer reviewDays) {
         String arguments = deepSeekClient.review(project, rule, skill, chunk, branch, reviewDays);
-        return saveIssues(taskId, project, rule, skill, chunk, arguments);
+        return saveIssues(taskId, project, rule, skill, chunk, branch, reviewDays, arguments);
     }
 
     private int saveIssues(Long taskId,
@@ -46,8 +46,37 @@ public class AiReviewExecutor {
                            ReviewRuleEntity rule,
                            AiSkillEntity skill,
                            DiffChunk chunk,
+                           String branch,
+                           Integer reviewDays,
                            String arguments) {
         try {
+            return saveParsedIssues(taskId, project, rule, skill, chunk, arguments);
+        } catch (Exception firstException) {
+            try {
+                String repairedArguments = deepSeekClient.repairReviewArguments(
+                    arguments,
+                    firstException.getMessage(),
+                    project,
+                    rule,
+                    skill,
+                    chunk,
+                    branch,
+                    reviewDays
+                );
+                return saveParsedIssues(taskId, project, rule, skill, chunk, repairedArguments);
+            } catch (Exception secondException) {
+                throw new BizException(ErrorCode.BIZ_ERROR, "AI function arguments are not valid review issue JSON after repair: "
+                    + secondException.getMessage() + "; original parse error: " + firstException.getMessage());
+            }
+        }
+    }
+
+    private int saveParsedIssues(Long taskId,
+                                 Project project,
+                                 ReviewRuleEntity rule,
+                                 AiSkillEntity skill,
+                                 DiffChunk chunk,
+                                 String arguments) throws Exception {
             List<ReviewIssueEntity> issues = reviewIssuePayloadParser.parse(
                 arguments,
                 taskId,
@@ -61,8 +90,5 @@ public class AiReviewExecutor {
                 reviewIssueMapper.insert(entity);
             }
             return issues.size();
-        } catch (Exception exception) {
-            throw new BizException(ErrorCode.BIZ_ERROR, "AI function arguments are not valid review issue JSON: " + exception.getMessage());
-        }
     }
 }

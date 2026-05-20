@@ -1,14 +1,15 @@
 package com.cmbchina.codereview.infrastructure.ai;
 
+import com.cmbchina.codereview.application.service.SystemConfigAppService;
 import com.cmbchina.codereview.common.exception.BizException;
 import com.cmbchina.codereview.common.exception.ErrorCode;
-import com.cmbchina.codereview.application.service.SystemConfigAppService;
+import com.cmbchina.codereview.domain.project.Project;
 import com.cmbchina.codereview.infrastructure.git.DiffChunk;
 import com.cmbchina.codereview.infrastructure.persistence.entity.AiSkillEntity;
 import com.cmbchina.codereview.infrastructure.persistence.entity.ReviewRuleEntity;
-import com.cmbchina.codereview.domain.project.Project;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -22,8 +23,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
 import org.springframework.util.StringUtils;
+import org.springframework.web.client.RestTemplate;
 
 @Component
 public class DeepSeekClient {
@@ -63,11 +64,49 @@ public class DeepSeekClient {
             if (!response.getStatusCode().is2xxSuccessful()) {
                 throw new BizException(ErrorCode.BIZ_ERROR, "DeepSeek request failed: HTTP " + response.getStatusCodeValue() + "; " + response.getBody());
             }
-            return extractArguments(response.getBody());
+            return extractJsonPayload(extractArguments(response.getBody()));
         } catch (BizException exception) {
             throw exception;
         } catch (Exception exception) {
             throw new BizException(ErrorCode.BIZ_ERROR, "DeepSeek request error: " + exception.getMessage());
+        }
+    }
+
+    public String repairReviewArguments(String invalidArguments,
+                                        String parseError,
+                                        Project project,
+                                        ReviewRuleEntity rule,
+                                        AiSkillEntity skill,
+                                        DiffChunk chunk,
+                                        String branch,
+                                        Integer reviewDays) {
+        String apiKey = systemConfigAppService.getDeepSeekApiKey(properties.getApiKey());
+        String url = normalizeChatCompletionsUrl(systemConfigAppService.getDeepSeekUrl(properties.getUrl()));
+        String model = systemConfigAppService.getDeepSeekModel(properties.getModel());
+        if (!StringUtils.hasText(apiKey)) {
+            throw new BizException(ErrorCode.BIZ_ERROR, "DeepSeek API key is not configured");
+        }
+        try {
+            String requestBody = objectMapper.writeValueAsString(
+                repairRequestBody(invalidArguments, parseError, project, rule, skill, chunk, branch, reviewDays, model)
+            );
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.setBearerAuth(apiKey);
+            ResponseEntity<String> response = restTemplate().exchange(
+                url,
+                HttpMethod.POST,
+                new HttpEntity<>(requestBody, headers),
+                String.class
+            );
+            if (!response.getStatusCode().is2xxSuccessful()) {
+                throw new BizException(ErrorCode.BIZ_ERROR, "DeepSeek repair request failed: HTTP " + response.getStatusCodeValue() + "; " + response.getBody());
+            }
+            return extractJsonPayload(extractArguments(response.getBody()));
+        } catch (BizException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new BizException(ErrorCode.BIZ_ERROR, "DeepSeek repair request error: " + exception.getMessage());
         }
     }
 
@@ -88,7 +127,22 @@ public class DeepSeekClient {
         toolChoice.put("type", "function");
         toolChoice.put("function", function);
         body.put("tool_choice", toolChoice);
-        body.put("temperature", 0.1);
+        body.put("temperature", 0);
+        return body;
+    }
+
+    private Map<String, Object> repairRequestBody(String invalidArguments,
+                                                  String parseError,
+                                                  Project project,
+                                                  ReviewRuleEntity rule,
+                                                  AiSkillEntity skill,
+                                                  DiffChunk chunk,
+                                                  String branch,
+                                                  Integer reviewDays,
+                                                  String model) throws Exception {
+        Map<String, Object> body = requestBody(project, rule, skill, chunk, branch, reviewDays, model);
+        body.put("messages", repairMessages(invalidArguments, parseError, project, rule, skill, chunk, branch, reviewDays));
+        body.put("temperature", 0);
         return body;
     }
 
@@ -98,8 +152,34 @@ public class DeepSeekClient {
                                                String branch,
                                                Integer reviewDays) {
         List<Map<String, String>> messages = new ArrayList<>();
-        messages.add(message("system", "You are a strict code review assistant. Return only structured issues through the provided function. Descriptive fields such as summary, detail and suggestion must be written in Chinese."));
+        messages.add(message("system", "You are a strict code review assistant. Return only structured issues through the provided function. Descriptive fields such as summary, detail and suggestion must be written in Chinese. Every code symbol, annotation and snippet must be placed inside JSON string fields with valid escaping. If there are no issues, call the function with {\"issues\":[]}."));
         String prompt = renderPrompt(rule.getPromptTemplate(), project, chunk, branch, reviewDays);
+        messages.add(message("user", prompt));
+        return messages;
+    }
+
+    private List<Map<String, String>> repairMessages(String invalidArguments,
+                                                     String parseError,
+                                                     Project project,
+                                                     ReviewRuleEntity rule,
+                                                     AiSkillEntity skill,
+                                                     DiffChunk chunk,
+                                                     String branch,
+                                                     Integer reviewDays) throws Exception {
+        List<Map<String, String>> messages = new ArrayList<>();
+        messages.add(message("system", "You repair malformed function arguments for a code review tool. Call only the provided function. Do not output Markdown or explanatory text. Produce valid JSON arguments that match the schema. Preserve useful review findings from the malformed input. If fields are missing, infer reasonable values from the diff, file path, rule severity and schema. Descriptive fields must be Chinese."));
+        String prompt = "The previous function arguments were invalid JSON.\n"
+            + "Parse error: " + value(parseError) + "\n"
+            + "Project: " + value(project.getProjectName()) + "\n"
+            + "ProjectType: " + value(project.getProjectType()) + "\n"
+            + "Branch: " + value(branch) + "\n"
+            + "ReviewDays: " + value(reviewDays) + "\n"
+            + "DefaultFilePath: " + value(chunk.getFilePath()) + "\n"
+            + "DefaultSeverity: " + value(rule.getSeverity()) + "\n"
+            + "FunctionName: " + value(skill.getFunctionName()) + "\n"
+            + "FunctionSchema:\n" + objectMapper.writeValueAsString(strictParametersSchema(objectMapper.readTree(skill.getParametersSchema()))) + "\n"
+            + "MalformedArguments:\n" + value(invalidArguments) + "\n"
+            + "OriginalDiff:\n" + value(chunk.getContent());
         messages.add(message("user", prompt));
         return messages;
     }
@@ -112,8 +192,11 @@ public class DeepSeekClient {
         prompt = prompt.replace("${reviewDays}", String.valueOf(reviewDays));
         prompt = prompt.replace("${diffContent}", value(chunk.getContent()));
         return prompt
-            + "\n\n请使用中文填写 summary、detail、suggestion 等描述性字段。"
-            + "\n如果能定位行号，请填写 startLine 和 endLine；如果只定位到单行，startLine 和 endLine 使用同一个行号。"
+            + "\n\nUse Chinese for summary, detail, suggestion and other descriptive fields."
+            + "\nReturn only through the provided function. Do not output Markdown, code fences, explanations or plain text."
+            + "\nAll code, annotations such as @Valid, quotes, backslashes and newlines must be valid JSON string values with correct escaping."
+            + "\nIf a line range can be located, fill startLine and endLine. If it is a single line issue, use the same value for both fields."
+            + "\nIf there are no issues, return {\"issues\":[]} through the function."
             + "\n\nFile: " + chunk.getFilePath()
             + "\nChunkIndex: " + chunk.getChunkIndex()
             + "\nOldStartLine: " + value(chunk.getOldStartLine())
@@ -125,13 +208,47 @@ public class DeepSeekClient {
         Map<String, Object> function = new LinkedHashMap<>();
         function.put("name", skill.getFunctionName());
         function.put("description", skill.getFunctionDescription());
-        function.put("parameters", objectMapper.readTree(skill.getParametersSchema()));
+        function.put("parameters", strictParametersSchema(objectMapper.readTree(skill.getParametersSchema())));
         Map<String, Object> tool = new LinkedHashMap<>();
         tool.put("type", "function");
         tool.put("function", function);
         List<Map<String, Object>> tools = new ArrayList<>();
         tools.add(tool);
         return tools;
+    }
+
+    private JsonNode strictParametersSchema(JsonNode schema) {
+        JsonNode copy = schema.deepCopy();
+        addStrictObjectRules(copy);
+        return copy;
+    }
+
+    private void addStrictObjectRules(JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return;
+        }
+        if (node.isObject()) {
+            ObjectNode object = (ObjectNode) node;
+            JsonNode type = object.get("type");
+            if (type != null && "object".equals(type.asText()) && !object.has("additionalProperties")) {
+                object.put("additionalProperties", false);
+            }
+            JsonNode properties = object.get("properties");
+            if (properties != null && properties.isObject()) {
+                properties.fields().forEachRemaining(entry -> addStrictObjectRules(entry.getValue()));
+            }
+            addStrictObjectRules(object.get("items"));
+            JsonNode anyOf = object.get("anyOf");
+            if (anyOf != null && anyOf.isArray()) {
+                anyOf.forEach(this::addStrictObjectRules);
+            }
+            JsonNode oneOf = object.get("oneOf");
+            if (oneOf != null && oneOf.isArray()) {
+                oneOf.forEach(this::addStrictObjectRules);
+            }
+        } else if (node.isArray()) {
+            node.forEach(this::addStrictObjectRules);
+        }
     }
 
     private String extractArguments(String responseBody) throws Exception {
@@ -141,14 +258,45 @@ public class DeepSeekClient {
         if (toolCalls.isArray() && toolCalls.size() > 0) {
             JsonNode arguments = toolCalls.path(0).path("function").path("arguments");
             if (!arguments.isMissingNode() && !arguments.isNull()) {
-                return arguments.asText();
+                return arguments.isTextual() ? arguments.asText() : arguments.toString();
             }
         }
         JsonNode content = message.path("content");
         if (!content.isMissingNode() && !content.isNull()) {
-            return content.asText();
+            return content.isTextual() ? content.asText() : content.toString();
         }
         throw new BizException(ErrorCode.BIZ_ERROR, "DeepSeek response has no function arguments");
+    }
+
+    private String extractJsonPayload(String value) {
+        if (!StringUtils.hasText(value)) {
+            return value;
+        }
+        String trimmed = value.trim();
+        if (trimmed.startsWith("```")) {
+            int firstLineBreak = trimmed.indexOf('\n');
+            int lastFence = trimmed.lastIndexOf("```");
+            if (firstLineBreak >= 0 && lastFence > firstLineBreak) {
+                return trimmed.substring(firstLineBreak + 1, lastFence).trim();
+            }
+        }
+        int objectStart = trimmed.indexOf('{');
+        int arrayStart = trimmed.indexOf('[');
+        int start;
+        if (objectStart < 0) {
+            start = arrayStart;
+        } else if (arrayStart < 0) {
+            start = objectStart;
+        } else {
+            start = Math.min(objectStart, arrayStart);
+        }
+        int objectEnd = trimmed.lastIndexOf('}');
+        int arrayEnd = trimmed.lastIndexOf(']');
+        int end = Math.max(objectEnd, arrayEnd);
+        if (start >= 0 && end >= start) {
+            return trimmed.substring(start, end + 1).trim();
+        }
+        return trimmed;
     }
 
     private Map<String, String> message(String role, String content) {
