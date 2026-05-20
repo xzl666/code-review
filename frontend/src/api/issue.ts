@@ -17,6 +17,7 @@ export interface ReviewIssue {
   detail?: string
   suggestion?: string
   codeSnippet?: string
+  codeDetailUrl?: string
   rawResponse?: string
   status: string
   createTime?: string

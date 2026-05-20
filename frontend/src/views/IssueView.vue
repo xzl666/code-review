@@ -110,6 +110,14 @@
         <section class="detail-section detail-section-file">
           <div class="detail-section-title">
             <strong>定位信息</strong>
+            <el-button
+              v-if="detail.codeDetailUrl"
+              type="primary"
+              :icon="ExternalLink"
+              @click="openCodeDetail(detail.codeDetailUrl)"
+            >
+              查看源码
+            </el-button>
           </div>
           <div class="detail-location">
             <div><span>文件</span><strong>{{ detail.filePath || '-' }}</strong></div>
@@ -149,7 +157,7 @@
 import { onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus/es/components/message/index.mjs'
-import { Download, Eye, Search } from 'lucide-vue-next'
+import { Download, ExternalLink, Eye, Search } from 'lucide-vue-next'
 import { pageProjects, type Project } from '@/api/project'
 import { exportIssues, getIssue, ignoreIssue, markIssueFixed, pageIssues, type ReviewIssue } from '@/api/issue'
 
@@ -313,6 +321,10 @@ function taskText(issue: ReviewIssue) {
 
 function formatTime(value?: string) {
   return value ? value.replace('T', ' ') : '-'
+}
+
+function openCodeDetail(url: string) {
+  window.open(url, '_blank', 'noopener,noreferrer')
 }
 
 function displayCodeSnippet(issue: ReviewIssue) {

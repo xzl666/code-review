@@ -38,6 +38,8 @@ public class ReviewIssueResponse {
 
     private String codeSnippet;
 
+    private String codeDetailUrl;
+
     private String rawResponse;
 
     private String status;

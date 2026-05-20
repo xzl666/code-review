@@ -20,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.net.URLEncoder;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -170,6 +171,7 @@ public class ReviewIssueAppService {
         response.setDetail(entity.getDetail());
         response.setSuggestion(entity.getSuggestion());
         response.setCodeSnippet(codeSnippet(entity));
+        response.setCodeDetailUrl(codeDetailUrl(entity));
         response.setRawResponse(entity.getRawResponse());
         response.setStatus(entity.getStatus());
         response.setCreateTime(entity.getCreateTime());
@@ -182,6 +184,66 @@ public class ReviewIssueAppService {
         }
         ReviewTaskEntity task = reviewTaskMapper.selectById(taskId);
         return task == null ? null : task.getTaskNo();
+    }
+
+    private String codeDetailUrl(ReviewIssueEntity entity) {
+        if (!StringUtils.hasText(entity.getFilePath())) {
+            return "";
+        }
+        Project project = projectRepository.findById(entity.getProjectId());
+        if (project == null || !StringUtils.hasText(project.getRepoUrl())) {
+            return "";
+        }
+        String repoUrl = publicRepoUrl(project.getRepoUrl());
+        if (!repoUrl.contains("gitee.com")) {
+            return "";
+        }
+        String branch = project.getDefaultBranch();
+        ReviewTaskEntity task = entity.getTaskId() == null ? null : reviewTaskMapper.selectById(entity.getTaskId());
+        if (task != null && StringUtils.hasText(task.getReviewBranch())) {
+            branch = task.getReviewBranch();
+        }
+        if (!StringUtils.hasText(branch)) {
+            branch = "master";
+        }
+        StringBuilder url = new StringBuilder(repoUrl)
+            .append("/blob/")
+            .append(encodePathSegment(branch))
+            .append("/")
+            .append(encodePath(entity.getFilePath()));
+        if (entity.getStartLine() != null && entity.getStartLine() > 0) {
+            url.append("#L").append(entity.getStartLine());
+        }
+        return url.toString();
+    }
+
+    private String publicRepoUrl(String repoUrl) {
+        String url = repoUrl.trim();
+        if (url.endsWith(".git")) {
+            url = url.substring(0, url.length() - 4);
+        }
+        int schemeIndex = url.indexOf("://");
+        if (schemeIndex >= 0) {
+            int credentialEnd = url.indexOf('@', schemeIndex + 3);
+            if (credentialEnd >= 0) {
+                url = url.substring(0, schemeIndex + 3) + url.substring(credentialEnd + 1);
+            }
+        }
+        return url;
+    }
+
+    private String encodePath(String path) {
+        return java.util.Arrays.stream(path.replace("\\", "/").split("/"))
+            .map(this::encodePathSegment)
+            .collect(Collectors.joining("/"));
+    }
+
+    private String encodePathSegment(String value) {
+        try {
+            return URLEncoder.encode(value, StandardCharsets.UTF_8.name()).replace("+", "%20");
+        } catch (Exception exception) {
+            return value;
+        }
     }
 
     private String codeSnippet(ReviewIssueEntity entity) {
