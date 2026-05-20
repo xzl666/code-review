@@ -112,6 +112,7 @@
             <strong>定位信息</strong>
             <el-button
               v-if="detail.codeDetailUrl"
+              class="source-link-button"
               type="primary"
               :icon="ExternalLink"
               @click="openCodeDetail(detail.codeDetailUrl)"

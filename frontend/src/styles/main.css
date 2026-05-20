@@ -599,6 +599,17 @@ body {
   font-size: 12px;
 }
 
+.source-link-button,
+.source-link-button:hover,
+.source-link-button:focus {
+  color: #ffffff;
+}
+
+.source-link-button .el-icon,
+.source-link-button svg {
+  color: #ffffff;
+}
+
 .detail-meta-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
