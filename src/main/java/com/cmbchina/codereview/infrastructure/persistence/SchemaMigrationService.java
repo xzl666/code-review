@@ -50,6 +50,13 @@ public class SchemaMigrationService {
             "ALTER TABLE cr_review_task ADD COLUMN warning_message TEXT COMMENT 'task warning message' AFTER end_time");
         addColumnIfMissing("cr_review_task", "error_message",
             "ALTER TABLE cr_review_task ADD COLUMN error_message TEXT COMMENT 'task error message' AFTER warning_message");
+        addColumnIfMissing("cr_ai_skill", "project_type",
+            "ALTER TABLE cr_ai_skill ADD COLUMN project_type VARCHAR(32) NOT NULL DEFAULT 'ALL' COMMENT 'applicable project type' AFTER version");
+        addColumnIfMissing("cr_ai_skill", "rule_matching_enabled",
+            "ALTER TABLE cr_ai_skill ADD COLUMN rule_matching_enabled TINYINT NOT NULL DEFAULT 0 COMMENT 'rule matching enabled' AFTER project_type");
+        addColumnIfMissing("cr_ai_skill", "match_rules",
+            "ALTER TABLE cr_ai_skill ADD COLUMN match_rules TEXT COMMENT 'skill match rules' AFTER rule_matching_enabled");
+        seedDefaultAiSkills();
     }
 
     private void addColumnIfMissing(String tableName, String columnName, String ddl) {
@@ -80,5 +87,131 @@ public class SchemaMigrationService {
             tableName
         );
         return count != null && count > 0;
+    }
+
+    private void seedDefaultAiSkills() {
+        if (!tableExists("cr_ai_skill") || !tableExists("cr_review_rule")) {
+            return;
+        }
+        Long frontendSkillId = seedSkill(
+            "前端 React Web 默认检视 Skill",
+            "DEFAULT_FRONTEND_REACT_WEB_REVIEW",
+            "面向 React Web 前端项目，重点检视组件状态、Hooks、异步请求、XSS、表单校验、性能和可维护性问题。",
+            "FRONTEND",
+            frontendMatchRules()
+        );
+        Long backendSkillId = seedSkill(
+            "后端 Java Web 默认检视 Skill",
+            "DEFAULT_BACKEND_JAVA_WEB_REVIEW",
+            "面向 Java Web 后端项目，重点检视接口安全、事务边界、异常处理、参数校验、并发、资源释放和数据库访问问题。",
+            "BACKEND",
+            backendMatchRules()
+        );
+        seedAiRule("前端 React Web 默认 AI 检视", "DEFAULT_FRONTEND_REACT_WEB_AI_REVIEW", "FRONTEND", frontendSkillId, 10);
+        seedAiRule("后端 Java Web 默认 AI 检视", "DEFAULT_BACKEND_JAVA_WEB_AI_REVIEW", "BACKEND", backendSkillId, 20);
+    }
+
+    private Long seedSkill(String name, String code, String description, String projectType, String matchRules) {
+        Long id = skillId(code);
+        if (id != null) {
+            return id;
+        }
+        jdbcTemplate.update(
+            "INSERT INTO cr_ai_skill (skill_name, skill_code, function_name, function_description, parameters_schema, version, project_type, rule_matching_enabled, match_rules, status) "
+                + "VALUES (?, ?, 'submit_review_issues', ?, ?, '1.0.0', ?, 1, ?, 1)",
+            name,
+            code,
+            description,
+            defaultIssueSchema(),
+            projectType,
+            matchRules
+        );
+        return skillId(code);
+    }
+
+    private void seedAiRule(String name, String code, String projectType, Long skillId, int sortOrder) {
+        if (skillId == null || ruleExists(code)) {
+            return;
+        }
+        jdbcTemplate.update(
+            "INSERT INTO cr_review_rule (rule_name, rule_code, rule_kind, rule_type, severity, project_type, prompt_template, skill_id, status, sort_order) "
+                + "VALUES (?, ?, 'AI', 'CUSTOM', 'MAJOR', ?, ?, ?, 1, ?)",
+            name,
+            code,
+            projectType,
+            defaultPromptTemplate(),
+            skillId,
+            sortOrder
+        );
+    }
+
+    private Long skillId(String skillCode) {
+        return jdbcTemplate.query(
+            "SELECT id FROM cr_ai_skill WHERE skill_code = ? AND deleted = 0 ORDER BY id LIMIT 1",
+            resultSet -> resultSet.next() ? resultSet.getLong("id") : null,
+            skillCode
+        );
+    }
+
+    private boolean ruleExists(String ruleCode) {
+        Integer count = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM cr_review_rule WHERE rule_code = ? AND deleted = 0",
+            Integer.class,
+            ruleCode
+        );
+        return count != null && count > 0;
+    }
+
+    private String frontendMatchRules() {
+        return "ext:js,jsx,ts,tsx,vue\n"
+            + "path:**/src/**\n"
+            + "contains:useEffect\n"
+            + "contains:dangerouslySetInnerHTML\n"
+            + "contains:localStorage\n"
+            + "contains:fetch(";
+    }
+
+    private String backendMatchRules() {
+        return "ext:java\n"
+            + "path:**/src/main/java/**\n"
+            + "contains:@RestController\n"
+            + "contains:@Controller\n"
+            + "contains:@Service\n"
+            + "contains:@Transactional";
+    }
+
+    private String defaultPromptTemplate() {
+        return "请检视项目 ${projectName}（${projectType}）在分支 ${branch} 最近 ${reviewDays} 天的代码变更。"
+            + "只针对 diff 中新增的新文件行报告真实问题，忽略纯上下文代码。"
+            + "请重点关注 Web 项目的安全、稳定性、可维护性、性能、异常处理、输入校验和边界条件。"
+            + "输出字段必须使用中文描述，并通过函数调用返回结构化 issues。"
+            + "\n\n${diffContent}";
+    }
+
+    private String defaultIssueSchema() {
+        return "{\n"
+            + "  \"type\": \"object\",\n"
+            + "  \"properties\": {\n"
+            + "    \"issues\": {\n"
+            + "      \"type\": \"array\",\n"
+            + "      \"items\": {\n"
+            + "        \"type\": \"object\",\n"
+            + "        \"properties\": {\n"
+            + "          \"issueType\": { \"type\": \"string\" },\n"
+            + "          \"severity\": { \"type\": \"string\" },\n"
+            + "          \"filePath\": { \"type\": \"string\" },\n"
+            + "          \"startLine\": { \"type\": \"integer\" },\n"
+            + "          \"endLine\": { \"type\": \"integer\" },\n"
+            + "          \"summary\": { \"type\": \"string\" },\n"
+            + "          \"detail\": { \"type\": \"string\" },\n"
+            + "          \"suggestion\": { \"type\": \"string\" },\n"
+            + "          \"codeSnippet\": { \"type\": \"string\" }\n"
+            + "        },\n"
+            + "        \"required\": [\"issueType\", \"severity\", \"filePath\", \"summary\", \"suggestion\"]\n"
+            + "      }\n"
+            + "    }\n"
+            + "  },\n"
+            + "  \"required\": [\"issues\"]\n"
+            + "}";
     }
 }

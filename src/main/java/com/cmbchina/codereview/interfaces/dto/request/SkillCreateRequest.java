@@ -21,4 +21,10 @@ public class SkillCreateRequest {
     private String parametersSchema;
 
     private String version = "1.0.0";
+
+    private String projectType = "ALL";
+
+    private Integer ruleMatchingEnabled = 0;
+
+    private String matchRules;
 }

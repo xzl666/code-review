@@ -19,5 +19,11 @@ public class SkillResponse {
 
     private String version;
 
+    private String projectType;
+
+    private Integer ruleMatchingEnabled;
+
+    private String matchRules;
+
     private Integer status;
 }

@@ -8,6 +8,11 @@
       <el-input v-model="query.skillName" clearable placeholder="Skill 名称" class="toolbar-input" @keyup.enter="loadSkills">
         <template #prefix><Search :size="16" /></template>
       </el-input>
+      <el-select v-model="query.projectType" clearable placeholder="项目类型" class="toolbar-select">
+        <el-option label="全部" value="ALL" />
+        <el-option label="前端" value="FRONTEND" />
+        <el-option label="后端" value="BACKEND" />
+      </el-select>
       <el-select v-model="query.status" clearable placeholder="状态" class="toolbar-select">
         <el-option label="启用" :value="1" />
         <el-option label="停用" :value="0" />
@@ -27,6 +32,16 @@
       <el-table v-loading="loading" :data="skills" stripe class="data-table">
         <el-table-column prop="skillName" label="名称" min-width="150" />
         <el-table-column prop="skillCode" label="编码" min-width="150" show-overflow-tooltip />
+        <el-table-column prop="projectType" label="项目类型" width="110">
+          <template #default="{ row }">{{ projectTypeLabel(row.projectType) }}</template>
+        </el-table-column>
+        <el-table-column prop="ruleMatchingEnabled" label="规则匹配" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.ruleMatchingEnabled === 1 ? 'success' : 'info'" effect="plain">
+              {{ row.ruleMatchingEnabled === 1 ? '开启' : '关闭' }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="functionName" label="函数名" min-width="170" show-overflow-tooltip />
         <el-table-column prop="version" label="版本" width="100" />
         <el-table-column prop="parametersSchema" label="Schema" min-width="260" show-overflow-tooltip>
@@ -70,8 +85,29 @@
         <el-form-item label="函数名" prop="functionName">
           <el-input v-model="form.functionName" />
         </el-form-item>
+        <el-form-item label="适用项目" prop="projectType">
+          <el-segmented v-model="form.projectType" :options="projectTypeOptions" />
+        </el-form-item>
         <el-form-item label="版本" prop="version">
           <el-input v-model="form.version" />
+        </el-form-item>
+        <el-form-item label="匹配规则">
+          <el-switch
+            v-model="form.ruleMatchingEnabled"
+            :active-value="1"
+            :inactive-value="0"
+            active-text="开启"
+            inactive-text="关闭"
+          />
+        </el-form-item>
+        <el-form-item v-if="form.ruleMatchingEnabled === 1" label="规则内容">
+          <el-input
+            v-model="form.matchRules"
+            type="textarea"
+            :rows="7"
+            spellcheck="false"
+            placeholder="每行一条：ext:java 或 ext:js,jsx,ts,tsx；path:**/src/**；contains:@Transactional；regex:use[A-Z].*"
+          />
         </el-form-item>
         <el-form-item label="函数描述">
           <el-input v-model="form.functionDescription" type="textarea" :rows="3" />
@@ -157,8 +193,15 @@ const total = ref(0)
 const schemaResult = ref<{ valid: boolean; message: string }>()
 const aiRequirement = ref('')
 
+const projectTypeOptions = [
+  { label: '全部', value: 'ALL' },
+  { label: '前端', value: 'FRONTEND' },
+  { label: '后端', value: 'BACKEND' }
+]
+
 const query = reactive({
   skillName: '',
+  projectType: undefined as string | undefined,
   status: undefined as number | undefined,
   pageNo: 1,
   pageSize: 10
@@ -170,13 +213,17 @@ const form = reactive<SkillForm>({
   functionName: 'submit_review_issues',
   functionDescription: '',
   parametersSchema: defaultSchema,
-  version: '1.0.0'
+  version: '1.0.0',
+  projectType: 'ALL',
+  ruleMatchingEnabled: 0,
+  matchRules: ''
 })
 
 const rules: FormRules = {
   skillName: [{ required: true, message: '请输入 Skill 名称', trigger: 'blur' }],
   skillCode: [{ required: true, message: '请输入 Skill 编码', trigger: 'blur' }],
   functionName: [{ required: true, message: '请输入函数名', trigger: 'blur' }],
+  projectType: [{ required: true, message: '请选择适用项目', trigger: 'change' }],
   parametersSchema: [{ required: true, message: '请输入参数 Schema', trigger: 'blur' }],
   version: [{ required: true, message: '请输入版本', trigger: 'blur' }]
 }
@@ -186,6 +233,7 @@ async function loadSkills() {
   try {
     const page = await pageSkills({
       skillName: query.skillName || undefined,
+      projectType: query.projectType,
       status: query.status,
       pageNo: query.pageNo,
       pageSize: query.pageSize
@@ -208,6 +256,9 @@ function resetForm() {
     functionDescription: '',
     parametersSchema: defaultSchema,
     version: '1.0.0',
+    projectType: 'ALL',
+    ruleMatchingEnabled: 0,
+    matchRules: '',
     status: undefined
   })
   aiRequirement.value = ''
@@ -221,7 +272,12 @@ function openCreate() {
 function openEdit(row: Skill) {
   editingId.value = row.id
   schemaResult.value = undefined
-  Object.assign(form, { ...row })
+  Object.assign(form, {
+    ...row,
+    projectType: row.projectType || 'ALL',
+    ruleMatchingEnabled: row.ruleMatchingEnabled ?? 0,
+    matchRules: row.matchRules || ''
+  })
   aiRequirement.value = row.functionDescription || row.skillName
   dialogVisible.value = true
 }
@@ -231,7 +287,7 @@ async function generateDraft() {
   try {
     const draft = await generateSkillDraft({
       requirement: aiRequirement.value || form.functionDescription || form.skillName,
-      projectType: 'BACKEND',
+      projectType: form.projectType || 'BACKEND',
       ruleType: 'CUSTOM',
       severity: 'MAJOR'
     })
@@ -241,7 +297,10 @@ async function generateDraft() {
       functionName: draft.functionName,
       functionDescription: draft.functionDescription,
       parametersSchema: draft.parametersSchema,
-      version: draft.version || '1.0.0'
+      version: draft.version || '1.0.0',
+      projectType: draft.projectType || form.projectType || 'ALL',
+      ruleMatchingEnabled: draft.ruleMatchingEnabled ?? 1,
+      matchRules: draft.matchRules || defaultMatchRules(draft.projectType || form.projectType)
     })
     schemaResult.value = undefined
     ElMessage.success('AI 已生成 Skill 草稿')
@@ -302,6 +361,22 @@ function schemaSummary(value: string) {
   } catch {
     return value
   }
+}
+
+function projectTypeLabel(value?: string) {
+  if (value === 'FRONTEND') return '前端'
+  if (value === 'BACKEND') return '后端'
+  return '全部'
+}
+
+function defaultMatchRules(projectType?: string) {
+  if (projectType === 'FRONTEND') {
+    return ['ext:js,jsx,ts,tsx,vue', 'path:**/src/**', 'contains:useEffect', 'contains:dangerouslySetInnerHTML', 'contains:fetch('].join('\n')
+  }
+  if (projectType === 'BACKEND') {
+    return ['ext:java', 'path:**/src/main/java/**', 'contains:@RestController', 'contains:@Service', 'contains:@Transactional'].join('\n')
+  }
+  return ''
 }
 
 onMounted(loadSkills)

@@ -361,6 +361,9 @@ async function generateDraft() {
         functionDescription: draft.functionDescription,
         parametersSchema: draft.parametersSchema,
         version: draft.version,
+        projectType: draft.projectType || form.projectType || 'ALL',
+        ruleMatchingEnabled: draft.ruleMatchingEnabled ?? 1,
+        matchRules: draft.matchRules || '',
         status: 1
       })
       await loadBindings()

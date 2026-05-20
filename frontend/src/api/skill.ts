@@ -8,6 +8,9 @@ export interface Skill {
   functionDescription?: string
   parametersSchema: string
   version: string
+  projectType: string
+  ruleMatchingEnabled: number
+  matchRules?: string
   status: number
 }
 
@@ -19,12 +22,16 @@ export interface SkillForm {
   functionDescription?: string
   parametersSchema: string
   version: string
+  projectType: string
+  ruleMatchingEnabled: number
+  matchRules?: string
   status?: number
 }
 
 export interface SkillQuery {
   skillName?: string
   skillCode?: string
+  projectType?: string
   status?: number
   pageNo: number
   pageSize: number
@@ -49,6 +56,8 @@ export interface AiGeneratedSkillDraft {
   ruleType?: string
   severity?: string
   projectType?: string
+  ruleMatchingEnabled?: number
+  matchRules?: string
   promptTemplate?: string
 }
 

@@ -144,8 +144,9 @@ public class AiDraftGenerationService {
             + "问题类型：" + value(request.getRuleType(), "CUSTOM") + "\n"
             + "严重度：" + value(request.getSeverity(), "MAJOR") + "\n"
             + "返回 JSON 字段必须完整包含：skillName、skillCode、functionName、functionDescription、parametersSchema、version、"
-            + "ruleName、ruleCode、ruleType、severity、projectType、promptTemplate。"
+            + "projectType、ruleMatchingEnabled、matchRules、ruleName、ruleCode、ruleType、severity、promptTemplate。"
             + "skillCode 和 ruleCode 使用大写下划线，version 默认为 1.0.0。"
+            + "matchRules 使用多行文本，支持 ext:、path:、contains:、regex:；ruleMatchingEnabled 默认为 1。"
             + "parametersSchema 必须兼容平台 Function Calling，建议使用以下结构并按需求补充描述：\n" + DEFAULT_ISSUE_SCHEMA;
     }
 
@@ -250,6 +251,8 @@ public class AiDraftGenerationService {
         response.setRuleType(value(response.getRuleType(), value(request.getRuleType(), "CUSTOM")));
         response.setSeverity(value(response.getSeverity(), value(request.getSeverity(), "MAJOR")));
         response.setParametersSchema(value(response.getParametersSchema(), DEFAULT_ISSUE_SCHEMA));
+        response.setRuleMatchingEnabled(response.getRuleMatchingEnabled() == null ? 1 : response.getRuleMatchingEnabled());
+        response.setMatchRules(value(response.getMatchRules(), defaultMatchRules(response.getProjectType())));
     }
 
     private void normalizeSkillSchema(AiGeneratedSkillResponse response) throws Exception {
@@ -289,6 +292,23 @@ public class AiDraftGenerationService {
 
     private String value(String value, String defaultValue) {
         return StringUtils.hasText(value) ? value : defaultValue;
+    }
+
+    private String defaultMatchRules(String projectType) {
+        if ("FRONTEND".equalsIgnoreCase(projectType)) {
+            return "ext:js,jsx,ts,tsx,vue\n"
+                + "path:**/src/**\n"
+                + "contains:useEffect\n"
+                + "contains:dangerouslySetInnerHTML\n"
+                + "contains:localStorage\n"
+                + "contains:fetch(";
+        }
+        return "ext:java\n"
+            + "path:**/src/main/java/**\n"
+            + "contains:@RestController\n"
+            + "contains:@Controller\n"
+            + "contains:@Service\n"
+            + "contains:@Transactional";
     }
 
     private String normalizeChatCompletionsUrl(String url) {

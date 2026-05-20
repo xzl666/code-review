@@ -11,5 +11,7 @@ public class SkillPageRequest extends PageRequest {
 
     private String skillCode;
 
+    private String projectType;
+
     private Integer status;
 }

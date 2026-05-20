@@ -48,6 +48,9 @@ public class SkillAppService {
         entity.setFunctionDescription(request.getFunctionDescription());
         entity.setParametersSchema(request.getParametersSchema());
         entity.setVersion(defaultIfBlank(request.getVersion(), "1.0.0"));
+        entity.setProjectType(normalizeProjectType(request.getProjectType()));
+        entity.setRuleMatchingEnabled(request.getRuleMatchingEnabled() == null ? 0 : request.getRuleMatchingEnabled());
+        entity.setMatchRules(request.getMatchRules());
         entity.setStatus(BaseStatus.ENABLED.getValue());
         aiSkillMapper.insert(entity);
         return entity.getId();
@@ -68,6 +71,9 @@ public class SkillAppService {
         entity.setFunctionDescription(request.getFunctionDescription());
         entity.setParametersSchema(request.getParametersSchema());
         entity.setVersion(defaultIfBlank(request.getVersion(), "1.0.0"));
+        entity.setProjectType(normalizeProjectType(request.getProjectType()));
+        entity.setRuleMatchingEnabled(request.getRuleMatchingEnabled() == null ? 0 : request.getRuleMatchingEnabled());
+        entity.setMatchRules(request.getMatchRules());
         entity.setStatus(request.getStatus() == null ? BaseStatus.ENABLED.getValue() : request.getStatus());
         aiSkillMapper.updateById(entity);
     }
@@ -88,6 +94,7 @@ public class SkillAppService {
         LambdaQueryWrapper<AiSkillEntity> wrapper = new LambdaQueryWrapper<AiSkillEntity>()
             .like(StringUtils.hasText(request.getSkillName()), AiSkillEntity::getSkillName, request.getSkillName())
             .like(StringUtils.hasText(request.getSkillCode()), AiSkillEntity::getSkillCode, request.getSkillCode())
+            .eq(StringUtils.hasText(request.getProjectType()), AiSkillEntity::getProjectType, request.getProjectType())
             .eq(request.getStatus() != null, AiSkillEntity::getStatus, request.getStatus())
             .orderByDesc(AiSkillEntity::getCreateTime);
         Page<AiSkillEntity> page = aiSkillMapper.selectPage(new Page<>(pageNo, pageSize), wrapper);
@@ -153,11 +160,22 @@ public class SkillAppService {
         response.setFunctionDescription(entity.getFunctionDescription());
         response.setParametersSchema(entity.getParametersSchema());
         response.setVersion(entity.getVersion());
+        response.setProjectType(defaultIfBlank(entity.getProjectType(), "ALL"));
+        response.setRuleMatchingEnabled(entity.getRuleMatchingEnabled() == null ? 0 : entity.getRuleMatchingEnabled());
+        response.setMatchRules(entity.getMatchRules());
         response.setStatus(entity.getStatus());
         return response;
     }
 
     private String defaultIfBlank(String value, String defaultValue) {
         return StringUtils.hasText(value) ? value : defaultValue;
+    }
+
+    private String normalizeProjectType(String projectType) {
+        String value = defaultIfBlank(projectType, "ALL").toUpperCase();
+        if (!"ALL".equals(value) && !"FRONTEND".equals(value) && !"BACKEND".equals(value)) {
+            throw new BizException(ErrorCode.PARAM_ERROR, "projectType must be ALL, FRONTEND or BACKEND");
+        }
+        return value;
     }
 }

@@ -51,6 +51,7 @@ public class ReviewEngineAppService {
     private final DeepSeekProperties deepSeekProperties;
     private final AiReviewExecutor aiReviewExecutor;
     private final ScriptReviewExecutor scriptReviewExecutor;
+    private final AiSkillRuleMatcher aiSkillRuleMatcher;
     private final NotificationDispatchService notificationDispatchService;
     private final Executor reviewTaskExecutor;
 
@@ -67,6 +68,7 @@ public class ReviewEngineAppService {
                                   DeepSeekProperties deepSeekProperties,
                                   AiReviewExecutor aiReviewExecutor,
                                   ScriptReviewExecutor scriptReviewExecutor,
+                                  AiSkillRuleMatcher aiSkillRuleMatcher,
                                   NotificationDispatchService notificationDispatchService,
                                   @Qualifier("reviewTaskExecutor") Executor reviewTaskExecutor) {
         this.reviewTaskMapper = reviewTaskMapper;
@@ -82,6 +84,7 @@ public class ReviewEngineAppService {
         this.deepSeekProperties = deepSeekProperties;
         this.aiReviewExecutor = aiReviewExecutor;
         this.scriptReviewExecutor = scriptReviewExecutor;
+        this.aiSkillRuleMatcher = aiSkillRuleMatcher;
         this.notificationDispatchService = notificationDispatchService;
         this.reviewTaskExecutor = reviewTaskExecutor;
     }
@@ -178,7 +181,13 @@ public class ReviewEngineAppService {
             if (skill == null || skill.getStatus() == null || skill.getStatus() != BaseStatus.ENABLED.getValue()) {
                 continue;
             }
+            if (!aiSkillRuleMatcher.appliesToProject(skill, project)) {
+                continue;
+            }
             for (DiffChunk chunk : chunks) {
+                if (!aiSkillRuleMatcher.matchesChunk(skill, chunk)) {
+                    continue;
+                }
                 result.aiCallCount++;
                 try {
                     aiReviewExecutor.execute(taskId, project, rule, skill, chunk, branch, reviewDays);

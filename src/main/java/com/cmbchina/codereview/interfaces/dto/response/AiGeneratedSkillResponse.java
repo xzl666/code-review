@@ -27,5 +27,9 @@ public class AiGeneratedSkillResponse {
 
     private String projectType;
 
+    private Integer ruleMatchingEnabled;
+
+    private String matchRules;
+
     private String promptTemplate;
 }

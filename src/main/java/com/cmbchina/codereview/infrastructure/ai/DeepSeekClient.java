@@ -119,7 +119,7 @@ public class DeepSeekClient {
                                             String model) throws Exception {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", model);
-        body.put("messages", messages(project, rule, chunk, branch, reviewDays));
+        body.put("messages", messages(project, rule, skill, chunk, branch, reviewDays));
         body.put("tools", tools(skill));
         Map<String, Object> function = new LinkedHashMap<>();
         function.put("name", skill.getFunctionName());
@@ -148,12 +148,13 @@ public class DeepSeekClient {
 
     private List<Map<String, String>> messages(Project project,
                                                ReviewRuleEntity rule,
+                                               AiSkillEntity skill,
                                                DiffChunk chunk,
                                                String branch,
                                                Integer reviewDays) {
         List<Map<String, String>> messages = new ArrayList<>();
         messages.add(message("system", "You are a strict code review assistant. Return only structured issues through the provided function. Descriptive fields such as summary, detail and suggestion must be written in Chinese. Every code symbol, annotation and snippet must be placed inside JSON string fields with valid escaping. If there are no issues, call the function with {\"issues\":[]}."));
-        String prompt = renderPrompt(rule.getPromptTemplate(), project, chunk, branch, reviewDays);
+        String prompt = renderPrompt(rule.getPromptTemplate(), project, skill, chunk, branch, reviewDays);
         messages.add(message("user", prompt));
         return messages;
     }
@@ -177,6 +178,9 @@ public class DeepSeekClient {
             + "DefaultFilePath: " + value(chunk.getFilePath()) + "\n"
             + "DefaultSeverity: " + value(rule.getSeverity()) + "\n"
             + "FunctionName: " + value(skill.getFunctionName()) + "\n"
+            + "SkillProjectType: " + value(skill.getProjectType()) + "\n"
+            + "SkillRuleMatchingEnabled: " + value(skill.getRuleMatchingEnabled()) + "\n"
+            + "SkillMatchRules:\n" + value(skill.getMatchRules()) + "\n"
             + "FunctionSchema:\n" + objectMapper.writeValueAsString(strictParametersSchema(objectMapper.readTree(skill.getParametersSchema()))) + "\n"
             + "ChangedNewLines:\n" + changedNewLines(chunk) + "\n"
             + "MalformedArguments:\n" + value(invalidArguments) + "\n"
@@ -185,7 +189,7 @@ public class DeepSeekClient {
         return messages;
     }
 
-    private String renderPrompt(String template, Project project, DiffChunk chunk, String branch, Integer reviewDays) {
+    private String renderPrompt(String template, Project project, AiSkillEntity skill, DiffChunk chunk, String branch, Integer reviewDays) {
         String prompt = StringUtils.hasText(template) ? template : "Review the following git diff and report code issues.";
         prompt = prompt.replace("${projectName}", value(project.getProjectName()));
         prompt = prompt.replace("${projectType}", value(project.getProjectType()));
@@ -196,6 +200,8 @@ public class DeepSeekClient {
             + "\n\nUse Chinese for summary, detail, suggestion and other descriptive fields."
             + "\nReturn only through the provided function. Do not output Markdown, code fences, explanations or plain text."
             + "\nAll code, annotations such as @Valid, quotes, backslashes and newlines must be valid JSON string values with correct escaping."
+            + "\nSkillProjectType: " + value(skill.getProjectType()) + ". SkillRuleMatchingEnabled: " + value(skill.getRuleMatchingEnabled()) + "."
+            + "\nWhen SkillMatchRules are provided, treat them as review scope hints and focus on issues relevant to those rules."
             + "\nIf a line range can be located, fill startLine and endLine. If it is a single line issue, use the same value for both fields."
             + "\nOnly report issues on changed new-file lines listed in ChangedNewLines. Do not report issues that appear only in unchanged context lines."
             + "\nstartLine and endLine must be actual new-file line numbers from ChangedNewLines. If no changed line is relevant, return no issue."
@@ -204,8 +210,16 @@ public class DeepSeekClient {
             + "\nChunkIndex: " + chunk.getChunkIndex()
             + "\nOldStartLine: " + value(chunk.getOldStartLine())
             + "\nNewStartLine: " + value(chunk.getNewStartLine())
+            + "\nSkillMatchRules:\n" + value(skill.getMatchRules())
             + "\nChangedNewLines:\n" + changedNewLines(chunk)
             + "\nDiff:\n" + chunk.getContent();
+    }
+
+    private String renderPrompt(String template, Project project, DiffChunk chunk, String branch, Integer reviewDays) {
+        AiSkillEntity skill = new AiSkillEntity();
+        skill.setProjectType("ALL");
+        skill.setRuleMatchingEnabled(0);
+        return renderPrompt(template, project, skill, chunk, branch, reviewDays);
     }
 
     private String changedNewLines(DiffChunk chunk) {
