@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="AI Code Review">
+  <defs>
+    <linearGradient id="bg" x1="10" y1="8" x2="54" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22c55e"/>
+      <stop offset="0.55" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#7c3aed"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="20" y1="14" x2="45" y2="47" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#dbeafe" stop-opacity="0.88"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="#0f172a"/>
+  <path d="M32 7 52 15v16c0 12.6-7.9 21.9-20 26-12.1-4.1-20-13.4-20-26V15L32 7Z" fill="url(#bg)"/>
+  <path d="M32 12.2 47 18v13.2c0 9.1-5.3 16.3-15 20.1-9.7-3.8-15-11-15-20.1V18l15-5.8Z" fill="#0f172a" opacity="0.28"/>
+  <path d="M25.1 25.1 18.8 31l6.3 5.9" fill="none" stroke="url(#shine)" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M38.9 25.1 45.2 31l-6.3 5.9" fill="none" stroke="url(#shine)" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M35 20.5 29 43.5" fill="none" stroke="#bfdbfe" stroke-width="4" stroke-linecap="round"/>
+  <path d="M47.5 12.6 49.1 16l3.4 1.6-3.4 1.6-1.6 3.4-1.6-3.4-3.4-1.6 3.4-1.6 1.6-3.4Z" fill="#f8fafc"/>
+  <circle cx="18" cy="47" r="3.2" fill="#86efac"/>
+</svg>
