@@ -66,16 +66,17 @@ body {
 .brand-mark {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #2563eb, #0891b2);
-  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.36);
-  font-weight: 800;
+  flex: none;
+  width: 42px;
+  height: 42px;
 }
 
-.brand-mark span {
-  color: #fff;
+.brand-mark img {
+  display: block;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.36);
 }
 
 .brand-title {

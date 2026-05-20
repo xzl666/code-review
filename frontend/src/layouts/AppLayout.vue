@@ -4,7 +4,7 @@
       <div class="sidebar-grid" />
       <div class="brand">
         <div class="brand-mark">
-          <span>AI</span>
+          <img src="/favicon.svg" alt="AI 代码检视平台" />
         </div>
         <div>
           <div class="brand-title">代码检视平台</div>
