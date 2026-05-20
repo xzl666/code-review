@@ -55,6 +55,9 @@
         <el-table-column label="检视任务" width="180" show-overflow-tooltip>
           <template #default="{ row }">{{ taskText(row) }}</template>
         </el-table-column>
+        <el-table-column label="问题类型" width="120">
+          <template #default="{ row }">{{ issueTypeText(row.issueType) }}</template>
+        </el-table-column>
         <el-table-column prop="summary" label="摘要" min-width="220" show-overflow-tooltip />
         <el-table-column prop="filePath" label="文件" min-width="260" show-overflow-tooltip />
         <el-table-column label="起始行" width="90">
@@ -102,7 +105,7 @@
             <div><span>检视任务</span><strong>{{ taskText(detail) }}</strong></div>
             <div><span>来源</span><strong>{{ detail.issueSource }}</strong></div>
             <div><span>状态</span><strong>{{ statusText(detail.status) }}</strong></div>
-            <div><span>问题类型</span><strong>{{ detail.issueType || '-' }}</strong></div>
+            <div><span>问题类型</span><strong>{{ issueTypeText(detail.issueType) }}</strong></div>
             <div><span>检查时间</span><strong>{{ formatTime(detail.createTime) }}</strong></div>
           </div>
         </section>
@@ -290,6 +293,21 @@ function severityType(severity: string) {
 
 function statusText(status: string) {
   return ({ OPEN: '打开', IGNORED: '已忽略', FIXED: '已修复' } as Record<string, string>)[status] || status
+}
+
+function issueTypeText(issueType?: string) {
+  if (!issueType) {
+    return '-'
+  }
+  return ({
+    BUG: '缺陷',
+    SECURITY: '安全',
+    PERFORMANCE: '性能',
+    RELIABILITY: '可靠性',
+    MAINTAINABILITY: '可维护性',
+    STYLE: '代码规范',
+    CUSTOM: '自定义'
+  } as Record<string, string>)[issueType] || issueType
 }
 
 function lineText(line?: number) {
