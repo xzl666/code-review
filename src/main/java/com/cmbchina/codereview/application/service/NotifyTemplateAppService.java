@@ -115,6 +115,8 @@ public class NotifyTemplateAppService {
         for (Map.Entry<String, Object> entry : safeVariables.entrySet()) {
             String placeholder = "${" + entry.getKey() + "}";
             result = result.replace(placeholder, entry.getValue() == null ? "" : String.valueOf(entry.getValue()));
+            String legacyPlaceholder = "{{" + entry.getKey() + "}}";
+            result = result.replace(legacyPlaceholder, entry.getValue() == null ? "" : String.valueOf(entry.getValue()));
         }
         return result;
     }

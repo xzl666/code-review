@@ -177,6 +177,11 @@
         <el-form-item label="模板内容" prop="templateContent">
           <el-input v-model="templateForm.templateContent" type="textarea" :rows="10" />
         </el-form-item>
+        <el-form-item label="默认占位符">
+          <div class="placeholder-help">
+            ${notifyAccount}、${notifyTitle}、${notifyContent}、${projectName}、${taskNo}、${status}、${issueCount}、${activeIssueCount}、${ignoredIssueCount}、${reportTitle}、${reportHtml}
+          </div>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="previewTemplateForm">预览当前模板</el-button>
@@ -257,7 +262,7 @@ const templateForm = reactive<NotifyTemplateForm>({
   templateCode: '',
   channelType: 'WEBHOOK',
   eventType: 'TASK_SUCCESS',
-  templateContent: '代码检视任务 {{taskNo}} 已完成，项目：{{projectName}}，问题数：{{issueCount}}。'
+  templateContent: '${notifyTitle}\n通知账号：${notifyAccount}\n${notifyContent}'
 })
 
 const eventOptions = [
@@ -396,7 +401,7 @@ function openTemplateCreate() {
     templateCode: '',
     channelType: 'WEBHOOK',
     eventType: 'TASK_SUCCESS',
-    templateContent: '代码检视任务 {{taskNo}} 已完成，项目：{{projectName}}，问题数：{{issueCount}}。',
+    templateContent: '${notifyTitle}\n通知账号：${notifyAccount}\n${notifyContent}',
     enabled: undefined
   })
   templateDialogVisible.value = true
@@ -474,8 +479,15 @@ function previewVariables() {
   return {
     taskNo: 'CR202605180001',
     projectName: 'code-review',
+    notifyAccount: 'zhangsan',
+    notifyTitle: '代码检视完成：code-review',
+    notifyContent: '任务 CR202605180001 发现 3 个问题，有效 2 个，已忽略 1 个。',
     status: 'SUCCESS',
     issueCount: 3,
+    activeIssueCount: 2,
+    ignoredIssueCount: 1,
+    reportTitle: '代码检视报告 - code-review',
+    reportHtml: '<article>报告内容</article>',
     errorMessage: ''
   }
 }

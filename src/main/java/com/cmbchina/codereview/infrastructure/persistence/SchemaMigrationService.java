@@ -38,10 +38,34 @@ public class SchemaMigrationService {
                 + "KEY idx_task (task_id),"
                 + "KEY idx_config (config_id)"
                 + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='notification delivery log'");
+        createTableIfMissing("cr_review_report",
+            "CREATE TABLE IF NOT EXISTS cr_review_report ("
+                + "id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'primary key',"
+                + "task_id BIGINT NOT NULL COMMENT 'review task id',"
+                + "task_no VARCHAR(64) NOT NULL COMMENT 'review task no',"
+                + "project_id BIGINT NOT NULL COMMENT 'project id',"
+                + "report_title VARCHAR(256) NOT NULL COMMENT 'report title',"
+                + "report_content MEDIUMTEXT NOT NULL COMMENT 'report html content',"
+                + "active_issue_count INT NOT NULL DEFAULT 0 COMMENT 'active issue count',"
+                + "ignored_issue_count INT NOT NULL DEFAULT 0 COMMENT 'ignored issue count',"
+                + "create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'create time',"
+                + "update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'update time',"
+                + "deleted TINYINT NOT NULL DEFAULT 0 COMMENT 'logic delete',"
+                + "PRIMARY KEY (id),"
+                + "UNIQUE KEY uk_task_id (task_id),"
+                + "KEY idx_project_id (project_id),"
+                + "KEY idx_task_no (task_no)"
+                + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='review report'");
         addColumnIfMissing("cr_project", "schedule_cron",
             "ALTER TABLE cr_project ADD COLUMN schedule_cron VARCHAR(128) DEFAULT NULL COMMENT 'schedule cron' AFTER review_days");
         addColumnIfMissing("cr_project", "schedule_enabled",
             "ALTER TABLE cr_project ADD COLUMN schedule_enabled TINYINT NOT NULL DEFAULT 0 COMMENT 'schedule enabled' AFTER schedule_cron");
+        addColumnIfMissing("cr_project", "notify_enabled",
+            "ALTER TABLE cr_project ADD COLUMN notify_enabled TINYINT NOT NULL DEFAULT 1 COMMENT 'notify enabled' AFTER schedule_enabled");
+        addColumnIfMissing("cr_project", "notify_webhook_url",
+            "ALTER TABLE cr_project ADD COLUMN notify_webhook_url VARCHAR(1024) DEFAULT NULL COMMENT 'project notify webhook url' AFTER notify_enabled");
+        addColumnIfMissing("cr_project", "notify_extra_params",
+            "ALTER TABLE cr_project ADD COLUMN notify_extra_params TEXT COMMENT 'project notify extra params json' AFTER notify_webhook_url");
         addColumnIfMissing("cr_review_task", "skipped_commit_count",
             "ALTER TABLE cr_review_task ADD COLUMN skipped_commit_count INT NOT NULL DEFAULT 0 COMMENT 'skipped commit count' AFTER ai_call_count");
         addColumnIfMissing("cr_review_task", "skipped_file_count",

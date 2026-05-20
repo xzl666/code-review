@@ -470,6 +470,18 @@ body {
   gap: 10px;
 }
 
+.placeholder-help {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1e40af;
+  font-size: 12px;
+  line-height: 20px;
+  word-break: break-word;
+}
+
 .inline-toolbar {
   margin-bottom: 16px;
   padding: 0;
@@ -681,6 +693,143 @@ body {
   border: 1px dashed #a3b18a;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.68);
+  color: #64748b;
+}
+
+.report-dialog .el-dialog__body {
+  background: #f4f7fb;
+}
+
+.report-content {
+  max-height: 72vh;
+  overflow: auto;
+}
+
+.review-report {
+  display: grid;
+  gap: 14px;
+  color: #172033;
+}
+
+.report-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #0f172a, #1d4ed8);
+  color: #fff;
+}
+
+.report-hero p,
+.report-hero h1 {
+  margin: 0;
+}
+
+.report-hero p {
+  color: #bfdbfe;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.report-hero h1 {
+  font-size: 24px;
+  line-height: 32px;
+}
+
+.report-hero span {
+  color: #dbeafe;
+}
+
+.report-summary,
+.report-meta {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.report-summary > div,
+.report-meta > div {
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.report-summary span,
+.report-meta span {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.report-summary strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 24px;
+}
+
+.report-section {
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.report-section h2,
+.report-section h3 {
+  margin: 0 0 12px;
+}
+
+.report-section h3 {
+  margin-top: 16px;
+  color: #334155;
+  font-size: 14px;
+}
+
+.report-issue {
+  margin-top: 10px;
+  padding: 14px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.report-issue.is-ignored {
+  border-color: #e5e7eb;
+  background: #f8fafc;
+  color: #64748b;
+}
+
+.report-issue-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.report-issue-head span {
+  flex: none;
+  color: #2563eb;
+  font-weight: 700;
+}
+
+.report-issue p {
+  margin: 6px 0;
+  color: #475569;
+}
+
+.report-issue blockquote {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-left: 3px solid #2563eb;
+  background: #eff6ff;
+}
+
+.report-empty {
+  padding: 14px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
   color: #64748b;
 }
 

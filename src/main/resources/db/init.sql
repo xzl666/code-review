@@ -15,6 +15,9 @@ CREATE TABLE IF NOT EXISTS cr_project (
   review_days INT NOT NULL DEFAULT 7 COMMENT '默认检视最近 N 天提交',
   schedule_cron VARCHAR(128) DEFAULT NULL COMMENT '定时检视 Cron 表达式',
   schedule_enabled TINYINT NOT NULL DEFAULT 0 COMMENT '是否启用定时检视',
+  notify_enabled TINYINT NOT NULL DEFAULT 1 COMMENT '是否发送检视结果通知',
+  notify_webhook_url VARCHAR(1024) DEFAULT NULL COMMENT '项目通知 Webhook 地址',
+  notify_extra_params TEXT COMMENT '项目通知额外参数 JSON',
   status TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1 启用，0 停用',
   remark VARCHAR(512) DEFAULT NULL COMMENT '备注',
   create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -150,6 +153,24 @@ CREATE TABLE IF NOT EXISTS cr_review_issue (
   KEY idx_severity (severity),
   KEY idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='检视问题表';
+
+CREATE TABLE IF NOT EXISTS cr_review_report (
+  id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+  task_id BIGINT NOT NULL COMMENT '检视任务 ID',
+  task_no VARCHAR(64) NOT NULL COMMENT '检视任务编号',
+  project_id BIGINT NOT NULL COMMENT '项目 ID',
+  report_title VARCHAR(256) NOT NULL COMMENT '报告标题',
+  report_content MEDIUMTEXT NOT NULL COMMENT '报告 HTML 内容',
+  active_issue_count INT NOT NULL DEFAULT 0 COMMENT '有效问题数',
+  ignored_issue_count INT NOT NULL DEFAULT 0 COMMENT '已忽略问题数',
+  create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  deleted TINYINT NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_task_id (task_id),
+  KEY idx_project_id (project_id),
+  KEY idx_task_no (task_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='检视报告表';
 
 CREATE TABLE IF NOT EXISTS cr_notify_config (
   id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',

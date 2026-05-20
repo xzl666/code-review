@@ -29,10 +29,13 @@ public class ProjectScheduleReviewService {
     @Scheduled(cron = "0 * * * * *")
     public void scheduleReviewTasks() {
         LocalDateTime now = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
+        int firedCount = 0;
         for (Project project : projectRepository.listScheduledEnabled()) {
             if (shouldFire(project, now)) {
+                stagger(firedCount);
                 startScheduledReview(project);
                 lastFireTimes.put(project.getId(), now);
+                firedCount++;
             }
         }
     }
@@ -56,6 +59,17 @@ public class ProjectScheduleReviewService {
             reviewTaskAppService.scheduledStart(request);
         } catch (Exception exception) {
             // Keep scheduler resilient; project-level validation errors should not stop other projects.
+        }
+    }
+
+    private void stagger(int firedCount) {
+        if (firedCount <= 0) {
+            return;
+        }
+        try {
+            Thread.sleep(Math.min(firedCount, 20) * 500L);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
         }
     }
 }

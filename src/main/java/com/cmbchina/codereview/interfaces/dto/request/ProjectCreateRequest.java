@@ -34,5 +34,11 @@ public class ProjectCreateRequest {
 
     private Integer scheduleEnabled;
 
+    private Integer notifyEnabled;
+
+    private String notifyWebhookUrl;
+
+    private String notifyExtraParams;
+
     private String remark;
 }

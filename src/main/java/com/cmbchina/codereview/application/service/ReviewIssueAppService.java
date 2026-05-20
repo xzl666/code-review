@@ -38,12 +38,16 @@ public class ReviewIssueAppService {
 
     private final ProjectRepository projectRepository;
 
+    private final ReviewReportAppService reviewReportAppService;
+
     public ReviewIssueAppService(ReviewIssueMapper reviewIssueMapper,
                                  ReviewTaskMapper reviewTaskMapper,
-                                 ProjectRepository projectRepository) {
+                                 ProjectRepository projectRepository,
+                                 ReviewReportAppService reviewReportAppService) {
         this.reviewIssueMapper = reviewIssueMapper;
         this.reviewTaskMapper = reviewTaskMapper;
         this.projectRepository = projectRepository;
+        this.reviewReportAppService = reviewReportAppService;
     }
 
     public PageResponse<ReviewIssueResponse> page(ReviewIssuePageRequest request) {
@@ -145,6 +149,7 @@ public class ReviewIssueAppService {
             .eq(ReviewIssueEntity::getId, id)
             .set(ReviewIssueEntity::getStatus, status);
         reviewIssueMapper.update(null, wrapper);
+        reviewReportAppService.regenerateForIssue(id);
     }
 
     private ReviewIssueEntity ensureExists(Long id) {

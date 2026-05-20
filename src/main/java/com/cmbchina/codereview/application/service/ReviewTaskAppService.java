@@ -61,6 +61,9 @@ public class ReviewTaskAppService {
         if (project == null) {
             throw new BizException(ErrorCode.NOT_FOUND, "项目不存在");
         }
+        if (hasActiveTask(project.getId())) {
+            throw new BizException(ErrorCode.BIZ_ERROR, "该项目已有待执行或执行中的检视任务，请等待完成后再触发");
+        }
         ReviewTaskEntity entity = new ReviewTaskEntity();
         entity.setTaskNo(generateTaskNo());
         entity.setProjectId(project.getId());
@@ -149,6 +152,13 @@ public class ReviewTaskAppService {
         LambdaQueryWrapper<ReviewTaskEntity> wrapper = new LambdaQueryWrapper<ReviewTaskEntity>()
             .eq(StringUtils.hasText(status), ReviewTaskEntity::getStatus, status);
         return reviewTaskMapper.selectCount(wrapper);
+    }
+
+    private boolean hasActiveTask(Long projectId) {
+        Long count = reviewTaskMapper.selectCount(new LambdaQueryWrapper<ReviewTaskEntity>()
+            .eq(ReviewTaskEntity::getProjectId, projectId)
+            .in(ReviewTaskEntity::getStatus, ReviewTaskStatus.PENDING.name(), ReviewTaskStatus.RUNNING.name()));
+        return count != null && count > 0;
     }
 
     private void updateStatus(Long id, String status, String errorMessage) {

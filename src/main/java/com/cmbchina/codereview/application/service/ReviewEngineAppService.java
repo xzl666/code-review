@@ -53,6 +53,8 @@ public class ReviewEngineAppService {
     private final ScriptReviewExecutor scriptReviewExecutor;
     private final AiSkillRuleMatcher aiSkillRuleMatcher;
     private final NotificationDispatchService notificationDispatchService;
+    private final ReviewIssueFingerprintService reviewIssueFingerprintService;
+    private final ReviewReportAppService reviewReportAppService;
     private final Executor reviewTaskExecutor;
 
     public ReviewEngineAppService(ReviewTaskMapper reviewTaskMapper,
@@ -70,6 +72,8 @@ public class ReviewEngineAppService {
                                   ScriptReviewExecutor scriptReviewExecutor,
                                   AiSkillRuleMatcher aiSkillRuleMatcher,
                                   NotificationDispatchService notificationDispatchService,
+                                  ReviewIssueFingerprintService reviewIssueFingerprintService,
+                                  ReviewReportAppService reviewReportAppService,
                                   @Qualifier("reviewTaskExecutor") Executor reviewTaskExecutor) {
         this.reviewTaskMapper = reviewTaskMapper;
         this.reviewIssueMapper = reviewIssueMapper;
@@ -86,6 +90,8 @@ public class ReviewEngineAppService {
         this.scriptReviewExecutor = scriptReviewExecutor;
         this.aiSkillRuleMatcher = aiSkillRuleMatcher;
         this.notificationDispatchService = notificationDispatchService;
+        this.reviewIssueFingerprintService = reviewIssueFingerprintService;
+        this.reviewReportAppService = reviewReportAppService;
         this.reviewTaskExecutor = reviewTaskExecutor;
     }
 
@@ -110,12 +116,23 @@ public class ReviewEngineAppService {
             GitDiffSummary diffSummary = gitDiffService.summarize(repoDir, task.getReviewDays());
             AiRuleExecutionResult aiRuleResult = executeAiRules(taskId, project, diffSummary, branch, task.getReviewDays());
             executeScriptRules(taskId, project, diffSummary, branch);
+            reviewIssueFingerprintService.applyHistoricalIgnoredIssues(taskId, project.getId());
             TaskIssueCounters counters = countIssues(taskId);
             markSuccess(taskId, diffSummary, counters, aiRuleResult);
+            generateReport(taskId);
             notificationDispatchService.notifyTaskSuccess(reviewTaskMapper.selectById(taskId));
         } catch (Exception exception) {
             markFailed(taskId, exception.getMessage());
+            generateReport(taskId);
             notificationDispatchService.notifyTaskFailed(reviewTaskMapper.selectById(taskId));
+        }
+    }
+
+    private void generateReport(Long taskId) {
+        try {
+            reviewReportAppService.generate(taskId);
+        } catch (Exception ignored) {
+            // Report generation must not hide the review task result.
         }
     }
 

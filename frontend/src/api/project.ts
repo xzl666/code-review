@@ -12,6 +12,9 @@ export interface Project {
   reviewDays: number
   scheduleCron?: string
   scheduleEnabled?: number
+  notifyEnabled?: number
+  notifyWebhookUrl?: string
+  notifyExtraParams?: string
   status: number
   remark?: string
 }
@@ -29,6 +32,9 @@ export interface ProjectForm {
   reviewDays: number
   scheduleCron?: string
   scheduleEnabled?: number
+  notifyEnabled?: number
+  notifyWebhookUrl?: string
+  notifyExtraParams?: string
   status?: number
   remark?: string
 }
@@ -63,4 +69,15 @@ export function enableProject(id: number) {
 
 export function disableProject(id: number) {
   return post<void>('/api/project/disable', { id })
+}
+
+export function testRepoConnection(data: {
+  projectId?: number
+  repoUrl?: string
+  branch?: string
+  projectToken?: string
+  useDefaultToken?: number
+  timeoutSeconds?: number
+}) {
+  return post<{ success: boolean; message: string; branch?: string }>('/api/project/test-repo-connection', data)
 }

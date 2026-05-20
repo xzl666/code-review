@@ -53,6 +53,7 @@
         <el-table-column label="操作" width="210" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" :icon="Eye" @click="openDetail(row.id)">详情</el-button>
+            <el-button v-if="isFinished(row)" link type="primary" :icon="FileText" @click="openReport(row.id)">报告</el-button>
             <el-button v-if="row.status === 'PENDING'" link type="warning" @click="cancelTask(row.id)">取消</el-button>
             <el-button v-if="row.status === 'FAILED'" link type="primary" @click="retryTask(row.id)">重试</el-button>
           </template>
@@ -111,6 +112,10 @@
         <div class="detail-full"><span>错误</span><pre>{{ detail.errorMessage || '-' }}</pre></div>
       </div>
     </el-drawer>
+
+    <el-dialog v-model="reportVisible" :title="report?.reportTitle || '检视报告'" width="980px" class="report-dialog">
+      <div v-if="report" class="report-content" v-html="report.reportContent" />
+    </el-dialog>
   </div>
 </template>
 
@@ -119,7 +124,7 @@ import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus/es/components/message/index.mjs'
-import { Eye, ListChecks, Plus, RefreshCw, Search } from 'lucide-vue-next'
+import { Eye, FileText, ListChecks, Plus, RefreshCw, Search } from 'lucide-vue-next'
 import { pageProjects, type Project } from '@/api/project'
 import {
   cancelReviewTask,
@@ -129,14 +134,17 @@ import {
   startReviewTask,
   type ReviewTask
 } from '@/api/reviewTask'
+import { getReviewReportByTask, type ReviewReport } from '@/api/reviewReport'
 
 const loading = ref(false)
 const starting = ref(false)
 const startDialogVisible = ref(false)
 const detailVisible = ref(false)
+const reportVisible = ref(false)
 const startFormRef = ref<FormInstance>()
 const tasks = ref<ReviewTask[]>([])
 const detail = ref<ReviewTask>()
+const report = ref<ReviewReport>()
 const total = ref(0)
 const projectOptions = ref<Project[]>([])
 const router = useRouter()
@@ -216,6 +224,11 @@ async function submitStart() {
 async function openDetail(id: number) {
   detail.value = await getReviewTask(id)
   detailVisible.value = true
+}
+
+async function openReport(taskId: number) {
+  report.value = await getReviewReportByTask(taskId)
+  reportVisible.value = true
 }
 
 function viewTaskIssues(task: ReviewTask) {

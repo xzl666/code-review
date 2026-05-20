@@ -37,6 +37,8 @@ public class ProjectAppService {
 
     private static final int DEFAULT_REVIEW_DAYS = 7;
 
+    private static final String DEFAULT_SCHEDULE_CRON = "0 0 7 * * *";
+
     private final ProjectRepository projectRepository;
 
     private final SystemConfigAppService systemConfigAppService;
@@ -53,7 +55,11 @@ public class ProjectAppService {
 
     @Transactional(rollbackFor = Exception.class)
     public Long create(ProjectCreateRequest request) {
-        validateSchedule(request.getScheduleEnabled(), request.getScheduleCron());
+        Integer scheduleEnabled = request.getScheduleEnabled() == null ? 1 : request.getScheduleEnabled();
+        String scheduleCron = defaultIfBlank(request.getScheduleCron(), DEFAULT_SCHEDULE_CRON);
+        validateSchedule(scheduleEnabled, scheduleCron);
+        validateNotifyExtraParams(request.getNotifyExtraParams());
+        validateRepository(request.getRepoUrl(), defaultIfBlank(request.getDefaultBranch(), DEFAULT_BRANCH), request.getProjectToken(), request.getUseDefaultToken());
         Project project = new Project();
         project.setProjectName(request.getProjectName());
         project.setProjectCode(request.getProjectCode());
@@ -64,8 +70,11 @@ public class ProjectAppService {
         project.setDefaultBranch(defaultIfBlank(request.getDefaultBranch(), DEFAULT_BRANCH));
         project.setOwnerName(request.getOwnerName());
         project.setReviewDays(request.getReviewDays() == null ? DEFAULT_REVIEW_DAYS : request.getReviewDays());
-        project.setScheduleCron(request.getScheduleCron());
-        project.setScheduleEnabled(request.getScheduleEnabled() == null ? 0 : request.getScheduleEnabled());
+        project.setScheduleCron(scheduleCron);
+        project.setScheduleEnabled(scheduleEnabled);
+        project.setNotifyEnabled(request.getNotifyEnabled() == null ? 1 : request.getNotifyEnabled());
+        project.setNotifyWebhookUrl(request.getNotifyWebhookUrl());
+        project.setNotifyExtraParams(request.getNotifyExtraParams());
         project.setStatus(BaseStatus.ENABLED.getValue());
         project.setRemark(request.getRemark());
         return projectRepository.save(project);
@@ -73,21 +82,27 @@ public class ProjectAppService {
 
     @Transactional(rollbackFor = Exception.class)
     public void update(ProjectUpdateRequest request) {
-        ensureExists(request.getId());
+        Project existing = ensureExists(request.getId());
         validateSchedule(request.getScheduleEnabled(), request.getScheduleCron());
+        validateNotifyExtraParams(request.getNotifyExtraParams());
+        String projectToken = StringUtils.hasText(request.getProjectToken()) ? request.getProjectToken() : existing.getProjectToken();
+        validateRepository(request.getRepoUrl(), defaultIfBlank(request.getDefaultBranch(), DEFAULT_BRANCH), projectToken, request.getUseDefaultToken());
         Project project = new Project();
         project.setId(request.getId());
         project.setProjectName(request.getProjectName());
         project.setProjectCode(request.getProjectCode());
         project.setProjectType(request.getProjectType());
         project.setRepoUrl(request.getRepoUrl());
-        project.setProjectToken(request.getProjectToken());
+        project.setProjectToken(projectToken);
         project.setUseDefaultToken(request.getUseDefaultToken());
         project.setDefaultBranch(request.getDefaultBranch());
         project.setOwnerName(request.getOwnerName());
         project.setReviewDays(request.getReviewDays());
         project.setScheduleCron(request.getScheduleCron());
         project.setScheduleEnabled(request.getScheduleEnabled() == null ? 0 : request.getScheduleEnabled());
+        project.setNotifyEnabled(request.getNotifyEnabled() == null ? 1 : request.getNotifyEnabled());
+        project.setNotifyWebhookUrl(request.getNotifyWebhookUrl());
+        project.setNotifyExtraParams(request.getNotifyExtraParams());
         project.setStatus(request.getStatus());
         project.setRemark(request.getRemark());
         projectRepository.update(project);
@@ -216,6 +231,9 @@ public class ProjectAppService {
         response.setReviewDays(project.getReviewDays());
         response.setScheduleCron(project.getScheduleCron());
         response.setScheduleEnabled(project.getScheduleEnabled());
+        response.setNotifyEnabled(project.getNotifyEnabled() == null ? 1 : project.getNotifyEnabled());
+        response.setNotifyWebhookUrl(project.getNotifyWebhookUrl());
+        response.setNotifyExtraParams(project.getNotifyExtraParams());
         response.setStatus(project.getStatus());
         response.setRemark(project.getRemark());
         return response;
@@ -248,7 +266,9 @@ public class ProjectAppService {
         project.setDefaultBranch(defaultIfBlank(cell(row, 5, formatter), DEFAULT_BRANCH));
         project.setOwnerName(cell(row, 6, formatter));
         project.setReviewDays(parseReviewDays(cell(row, 7, formatter)));
-        project.setScheduleEnabled(0);
+        project.setScheduleCron(DEFAULT_SCHEDULE_CRON);
+        project.setScheduleEnabled(1);
+        project.setNotifyEnabled(1);
         project.setStatus(BaseStatus.ENABLED.getValue());
         project.setRemark("Excel 导入");
         return project;
@@ -322,6 +342,28 @@ public class ProjectAppService {
         }
         if (!CronExpression.isValidExpression(scheduleCron)) {
             throw new BizException(ErrorCode.PARAM_ERROR, "Cron 表达式格式不正确，请使用 6 位 Spring Cron，例如：0 0 9 * * *");
+        }
+    }
+
+    private void validateRepository(String repoUrl, String branch, String projectToken, Integer useDefaultToken) {
+        String token = projectToken;
+        if (!StringUtils.hasText(token) && (useDefaultToken == null || useDefaultToken == 1)) {
+            token = systemConfigAppService.getDefaultGiteeToken();
+        }
+        RepoConnectionTestResponse response = gitRepositoryProbe.testConnection(repoUrl, branch, token, 15);
+        if (response == null || !Boolean.TRUE.equals(response.getSuccess())) {
+            throw new BizException(ErrorCode.PARAM_ERROR, "仓库地址校验失败：" + (response == null ? "未知错误" : response.getMessage()));
+        }
+    }
+
+    private void validateNotifyExtraParams(String value) {
+        if (!StringUtils.hasText(value)) {
+            return;
+        }
+        try {
+            new com.fasterxml.jackson.databind.ObjectMapper().readTree(value);
+        } catch (Exception exception) {
+            throw new BizException(ErrorCode.PARAM_ERROR, "通知额外参数必须是合法 JSON");
         }
     }
 }

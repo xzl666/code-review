@@ -45,6 +45,11 @@
             <el-tag v-else type="info" effect="plain">未启用</el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="结果通知" width="110">
+          <template #default="{ row }">
+            <el-tag :type="row.notifyEnabled === 0 ? 'info' : 'success'" effect="plain">{{ row.notifyEnabled === 0 ? '关闭' : '开启' }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="status" label="状态" width="90">
           <template #default="{ row }">
             <el-tag :type="row.status === 1 ? 'success' : 'info'">{{ row.status === 1 ? '启用' : '停用' }}</el-tag>
@@ -85,7 +90,14 @@
           <el-segmented v-model="form.projectType" :options="projectTypeOptions" />
         </el-form-item>
         <el-form-item label="仓库地址" prop="repoUrl">
-          <el-input v-model="form.repoUrl" />
+          <el-input v-model="form.repoUrl" @blur="validateRepo">
+            <template #append>
+              <el-button :loading="repoChecking" @click="validateRepo">校验</el-button>
+            </template>
+          </el-input>
+        </el-form-item>
+        <el-form-item v-if="repoCheckMessage" label="校验结果">
+          <el-tag :type="repoCheckSuccess ? 'success' : 'danger'" effect="plain">{{ repoCheckMessage }}</el-tag>
         </el-form-item>
         <el-form-item label="默认分支" prop="defaultBranch">
           <el-input v-model="form.defaultBranch" />
@@ -109,6 +121,21 @@
         </el-form-item>
         <el-form-item label="默认令牌">
           <el-switch v-model="useDefaultToken" active-text="使用" inactive-text="不用" />
+        </el-form-item>
+        <el-form-item label="结果通知">
+          <el-switch v-model="notifyEnabled" active-text="开启" inactive-text="关闭" />
+        </el-form-item>
+        <el-form-item v-if="form.notifyEnabled === 1" label="Webhook">
+          <el-input v-model="form.notifyWebhookUrl" placeholder="为空时使用全局启用的 Webhook 配置" />
+        </el-form-item>
+        <el-form-item v-if="form.notifyEnabled === 1" label="额外参数">
+          <el-input
+            v-model="form.notifyExtraParams"
+            type="textarea"
+            :rows="3"
+            spellcheck="false"
+            placeholder='JSON，例如 {"department":"研发","robotAtAll":false}'
+          />
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.remark" type="textarea" :rows="3" />
@@ -134,6 +161,7 @@ import {
   disableProject,
   enableProject,
   pageProjects,
+  testRepoConnection,
   updateProject,
   type Project,
   type ProjectForm
@@ -142,11 +170,14 @@ import { startReviewTask } from '@/api/reviewTask'
 
 const loading = ref(false)
 const saving = ref(false)
+const repoChecking = ref(false)
 const dialogVisible = ref(false)
 const editingId = ref<number>()
 const formRef = ref<FormInstance>()
 const projects = ref<Project[]>([])
 const total = ref(0)
+const repoCheckMessage = ref('')
+const repoCheckSuccess = ref(false)
 
 const query = reactive({
   projectName: '',
@@ -166,8 +197,11 @@ const form = reactive<ProjectForm>({
   defaultBranch: 'master',
   ownerName: '',
   reviewDays: 7,
-  scheduleCron: '',
-  scheduleEnabled: 0,
+  scheduleCron: '0 0 7 * * *',
+  scheduleEnabled: 1,
+  notifyEnabled: 1,
+  notifyWebhookUrl: '',
+  notifyExtraParams: '',
   remark: ''
 })
 
@@ -182,6 +216,13 @@ const scheduleEnabled = computed({
   get: () => form.scheduleEnabled === 1,
   set: (value: boolean) => {
     form.scheduleEnabled = value ? 1 : 0
+  }
+})
+
+const notifyEnabled = computed({
+  get: () => form.notifyEnabled === 1,
+  set: (value: boolean) => {
+    form.notifyEnabled = value ? 1 : 0
   }
 })
 
@@ -210,10 +251,15 @@ function resetForm() {
     defaultBranch: 'master',
     ownerName: '',
     reviewDays: 7,
-    scheduleCron: '',
-    scheduleEnabled: 0,
+    scheduleCron: '0 0 7 * * *',
+    scheduleEnabled: 1,
+    notifyEnabled: 1,
+    notifyWebhookUrl: '',
+    notifyExtraParams: '',
     remark: ''
   })
+  repoCheckMessage.value = ''
+  repoCheckSuccess.value = false
 }
 
 async function loadProjects() {
@@ -251,17 +297,49 @@ function openEdit(row: Project) {
     defaultBranch: row.defaultBranch,
     ownerName: row.ownerName || '',
     reviewDays: row.reviewDays,
-    scheduleCron: row.scheduleCron || '',
-    scheduleEnabled: row.scheduleEnabled || 0,
+    scheduleCron: row.scheduleCron || '0 0 7 * * *',
+    scheduleEnabled: row.scheduleEnabled ?? 1,
+    notifyEnabled: row.notifyEnabled ?? 1,
+    notifyWebhookUrl: row.notifyWebhookUrl || '',
+    notifyExtraParams: row.notifyExtraParams || '',
     status: row.status,
     remark: row.remark || ''
   })
   dialogVisible.value = true
 }
 
+async function validateRepo() {
+  if (!form.repoUrl?.trim()) {
+    return
+  }
+  repoChecking.value = true
+  repoCheckMessage.value = ''
+  try {
+    const result = await testRepoConnection({
+      repoUrl: form.repoUrl,
+      branch: form.defaultBranch || 'master',
+      projectToken: form.projectToken,
+      useDefaultToken: form.useDefaultToken,
+      timeoutSeconds: 15
+    })
+    repoCheckSuccess.value = result.success
+    repoCheckMessage.value = result.message
+  } finally {
+    repoChecking.value = false
+  }
+}
+
 async function submitForm() {
   if (!formRef.value) return
   await formRef.value.validate()
+  if (form.notifyExtraParams?.trim()) {
+    try {
+      JSON.parse(form.notifyExtraParams)
+    } catch {
+      ElMessage.error('通知额外参数必须是合法 JSON')
+      return
+    }
+  }
   saving.value = true
   try {
     if (editingId.value) {
