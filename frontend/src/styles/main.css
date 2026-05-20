@@ -602,12 +602,16 @@ body {
 .source-link-button,
 .source-link-button:hover,
 .source-link-button:focus {
-  color: #ffffff;
+  --el-button-text-color: #ffffff;
+  --el-button-hover-text-color: #ffffff;
+  --el-button-active-text-color: #ffffff;
+  color: #ffffff !important;
 }
 
+.detail-section-title .source-link-button span,
 .source-link-button .el-icon,
 .source-link-button svg {
-  color: #ffffff;
+  color: #ffffff !important;
 }
 
 .detail-meta-grid {
