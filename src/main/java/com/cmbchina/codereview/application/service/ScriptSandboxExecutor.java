@@ -2,7 +2,6 @@ package com.cmbchina.codereview.application.service;
 
 import com.cmbchina.codereview.common.exception.BizException;
 import com.cmbchina.codereview.common.exception.ErrorCode;
-import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -122,7 +121,10 @@ public class ScriptSandboxExecutor {
 
     private Path writeScript(Path workDir, String language, String content) throws Exception {
         String normalizedLanguage = language.toUpperCase(Locale.ROOT);
-        String suffix = "SHELL".equals(normalizedLanguage) ? ".sh" : ("PYTHON".equals(normalizedLanguage) ? ".py" : ".js");
+        if (!"PYTHON".equals(normalizedLanguage)) {
+            throw new BizException(ErrorCode.PARAM_ERROR, "脚本语言仅支持 PYTHON");
+        }
+        String suffix = ".py";
         Path scriptPath = workDir.resolve("script" + suffix);
         Files.write(scriptPath, content.getBytes(StandardCharsets.UTF_8));
         return scriptPath;
@@ -133,16 +135,7 @@ public class ScriptSandboxExecutor {
         if ("PYTHON".equals(normalizedLanguage)) {
             return Arrays.asList("python", scriptPath.toAbsolutePath().toString());
         }
-        if ("NODE".equals(normalizedLanguage)) {
-            return Arrays.asList("node", scriptPath.toAbsolutePath().toString());
-        }
-        if ("SHELL".equals(normalizedLanguage)) {
-            if (File.separatorChar == '\\') {
-                return Arrays.asList("cmd", "/c", scriptPath.toAbsolutePath().toString());
-            }
-            return Arrays.asList("sh", scriptPath.toAbsolutePath().toString());
-        }
-        throw new BizException(ErrorCode.PARAM_ERROR, "脚本语言仅支持 SHELL/PYTHON/NODE");
+        throw new BizException(ErrorCode.PARAM_ERROR, "脚本语言仅支持 PYTHON");
     }
 
     private void applyEnvironmentWhitelist(Map<String, String> environment, Path workDir) {

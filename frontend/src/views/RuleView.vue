@@ -3,15 +3,11 @@
     <section class="toolbar">
       <div class="toolbar-title">
         <strong>检视规则</strong>
-        <span>统一维护 AI 规则、脚本规则和项目类型匹配关系</span>
+        <span>维护 AI 规则和项目类型匹配关系</span>
       </div>
       <el-input v-model="query.ruleName" clearable placeholder="规则名称" class="toolbar-input" @keyup.enter="loadRules">
         <template #prefix><Search :size="16" /></template>
       </el-input>
-      <el-select v-model="query.ruleKind" clearable placeholder="规则类型" class="toolbar-select">
-        <el-option label="AI" value="AI" />
-        <el-option label="脚本" value="SCRIPT" />
-      </el-select>
       <el-select v-model="query.projectType" clearable placeholder="项目类型" class="toolbar-select">
         <el-option label="全部" value="ALL" />
         <el-option label="后端" value="BACKEND" />
@@ -25,7 +21,7 @@
       <div class="panel-header">
         <div>
           <h2>规则列表</h2>
-          <p>启用规则会参与检视任务的执行链路</p>
+          <p>启用规则会参与 AI Skill 检视任务的执行链路</p>
         </div>
         <el-tag effect="plain">共 {{ total }} 条</el-tag>
       </div>
@@ -33,16 +29,19 @@
         <el-table-column prop="ruleName" label="规则名称" min-width="150" />
         <el-table-column prop="ruleKind" label="类型" width="90">
           <template #default="{ row }">
-            <el-tag>{{ row.ruleKind === 'AI' ? 'AI' : '脚本' }}</el-tag>
+            <el-tag>AI</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="projectType" label="项目" width="90">
           <template #default="{ row }">{{ projectTypeText(row.projectType) }}</template>
         </el-table-column>
+        <el-table-column label="问题类型" width="120">
+          <template #default="{ row }">{{ issueTypeText(row.ruleType) }}</template>
+        </el-table-column>
         <el-table-column prop="severity" label="严重度" width="100">
           <template #default="{ row }">{{ severityText(row.severity) }}</template>
         </el-table-column>
-        <el-table-column label="绑定对象" min-width="160" show-overflow-tooltip>
+        <el-table-column label="绑定 Skill" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">{{ bindingText(row) }}</template>
         </el-table-column>
         <el-table-column prop="sortOrder" label="排序" width="80" />
@@ -81,9 +80,6 @@
         <el-form-item label="规则编码" prop="ruleCode">
           <el-input v-model="form.ruleCode" />
         </el-form-item>
-        <el-form-item label="规则类型" prop="ruleKind">
-          <el-segmented v-model="form.ruleKind" :options="ruleKindOptions" @change="resetBinding" />
-        </el-form-item>
         <el-form-item label="问题类型" prop="ruleType">
           <el-input v-model="form.ruleType" placeholder="STYLE / BUG / SECURITY / CUSTOM" />
         </el-form-item>
@@ -99,14 +95,9 @@
         <el-form-item label="项目类型" prop="projectType">
           <el-segmented v-model="form.projectType" :options="projectTypeOptions" />
         </el-form-item>
-        <el-form-item v-if="form.ruleKind === 'AI'" label="绑定 Skill" prop="skillId">
+        <el-form-item label="绑定 Skill" prop="skillId">
           <el-select v-model="form.skillId" filterable placeholder="选择启用的 Skill">
             <el-option v-for="item in skillOptions" :key="item.id" :label="item.skillName" :value="item.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item v-else label="绑定脚本" prop="scriptId">
-          <el-select v-model="form.scriptId" filterable placeholder="选择启用的脚本">
-            <el-option v-for="item in scriptOptions" :key="item.id" :label="item.scriptName" :value="item.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="排序">
@@ -144,14 +135,13 @@ import {
   deleteRule,
   disableRule,
   enableRule,
-  generateScriptDraft,
   pageRules,
   updateRule,
   type Rule,
   type RuleForm
 } from '@/api/rule'
-import { createScriptRule, pageScriptRules, type ScriptRule } from '@/api/scriptRule'
 import { createSkill, generateSkillDraft, pageSkills, type Skill } from '@/api/skill'
+import { issueTypeText } from '@/utils/dictionaries'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -162,12 +152,10 @@ const formRef = ref<FormInstance>()
 const rulesData = ref<Rule[]>([])
 const total = ref(0)
 const skillOptions = ref<Skill[]>([])
-const scriptOptions = ref<ScriptRule[]>([])
 const aiRequirement = ref('')
 
 const query = reactive({
   ruleName: '',
-  ruleKind: '',
   projectType: '',
   pageNo: 1,
   pageSize: 10
@@ -186,11 +174,6 @@ const form = reactive<RuleForm>({
   sortOrder: 0
 })
 
-const ruleKindOptions = [
-  { label: 'AI', value: 'AI' },
-  { label: '脚本', value: 'SCRIPT' }
-]
-
 const projectTypeOptions = [
   { label: '全部', value: 'ALL' },
   { label: '后端', value: 'BACKEND' },
@@ -200,12 +183,10 @@ const projectTypeOptions = [
 const formRules: FormRules = {
   ruleName: [{ required: true, message: '请输入规则名称', trigger: 'blur' }],
   ruleCode: [{ required: true, message: '请输入规则编码', trigger: 'blur' }],
-  ruleKind: [{ required: true, message: '请选择规则类型', trigger: 'change' }],
   ruleType: [{ required: true, message: '请输入问题类型', trigger: 'blur' }],
   severity: [{ required: true, message: '请选择严重度', trigger: 'change' }],
   projectType: [{ required: true, message: '请选择项目类型', trigger: 'change' }],
-  skillId: [{ required: true, message: '请选择 Skill', trigger: 'change' }],
-  scriptId: [{ required: true, message: '请选择脚本', trigger: 'change' }]
+  skillId: [{ required: true, message: '请选择 Skill', trigger: 'change' }]
 }
 
 async function loadRules() {
@@ -213,7 +194,7 @@ async function loadRules() {
   try {
     const page = await pageRules({
       ruleName: query.ruleName || undefined,
-      ruleKind: query.ruleKind || undefined,
+      ruleKind: 'AI',
       projectType: query.projectType || undefined,
       pageNo: query.pageNo,
       pageSize: query.pageSize
@@ -226,12 +207,8 @@ async function loadRules() {
 }
 
 async function loadBindings() {
-  const [skills, scripts] = await Promise.all([
-    pageSkills({ status: 1, pageNo: 1, pageSize: 200 }),
-    pageScriptRules({ status: 1, pageNo: 1, pageSize: 200 })
-  ])
+  const skills = await pageSkills({ status: 1, pageNo: 1, pageSize: 200 })
   skillOptions.value = skills.records
-  scriptOptions.value = scripts.records
 }
 
 function resetForm() {
@@ -253,11 +230,6 @@ function resetForm() {
   aiRequirement.value = ''
 }
 
-function resetBinding() {
-  form.skillId = undefined
-  form.scriptId = undefined
-}
-
 async function openCreate() {
   resetForm()
   await loadBindings()
@@ -277,11 +249,8 @@ async function submitForm() {
   saving.value = true
   try {
     const payload = { ...form, id: editingId.value, status: form.status ?? 1 }
-    if (payload.ruleKind === 'AI') {
-      payload.scriptId = undefined
-    } else {
-      payload.skillId = undefined
-    }
+    payload.ruleKind = 'AI'
+    payload.scriptId = undefined
     if (editingId.value) {
       await updateRule(payload)
       ElMessage.success('规则已更新')
@@ -317,78 +286,41 @@ async function generateDraft() {
   generating.value = true
   try {
     const requirement = aiRequirement.value || form.promptTemplate || form.ruleName
-    if (form.ruleKind === 'SCRIPT') {
-      const draft = await generateScriptDraft({
-        requirement,
-        projectType: form.projectType,
-        ruleType: form.ruleType,
-        severity: form.severity,
-        scriptLanguage: 'NODE'
-      })
-      const created = await createScriptRule({
-        scriptName: draft.scriptName,
-        scriptCode: draft.scriptCode,
-        scriptLanguage: draft.scriptLanguage,
-        scriptContent: draft.scriptContent,
-        parameterTemplate: draft.parameterTemplate,
-        timeoutSeconds: draft.timeoutSeconds || 20,
-        generatedByAi: 1,
-        status: 1
-      })
-      await loadBindings()
-      Object.assign(form, {
-        ruleName: draft.ruleName,
-        ruleCode: draft.ruleCode,
-        ruleType: draft.ruleType,
-        severity: draft.severity,
-        projectType: draft.projectType,
-        promptTemplate: draft.promptTemplate,
-        scriptId: created.id,
-        skillId: undefined
-      })
-      ElMessage.success('AI 已生成脚本并填充规则草稿')
-    } else {
-      const draft = await generateSkillDraft({
-        requirement,
-        projectType: form.projectType,
-        ruleType: form.ruleType,
-        severity: form.severity
-      })
-      const created = await createSkill({
-        skillName: draft.skillName,
-        skillCode: draft.skillCode,
-        functionName: draft.functionName,
-        functionDescription: draft.functionDescription,
-        parametersSchema: draft.parametersSchema,
-        version: draft.version,
-        projectType: draft.projectType || form.projectType || 'ALL',
-        ruleMatchingEnabled: draft.ruleMatchingEnabled ?? 1,
-        matchRules: draft.matchRules || '',
-        status: 1
-      })
-      await loadBindings()
-      Object.assign(form, {
-        ruleName: draft.ruleName || draft.skillName,
-        ruleCode: draft.ruleCode || draft.skillCode,
-        ruleType: draft.ruleType || form.ruleType,
-        severity: draft.severity || form.severity,
-        projectType: draft.projectType || form.projectType,
-        promptTemplate: draft.promptTemplate,
-        skillId: created.id,
-        scriptId: undefined
-      })
-      ElMessage.success('AI 已生成 Skill 并填充规则草稿')
-    }
+    const draft = await generateSkillDraft({
+      requirement,
+      projectType: form.projectType,
+      ruleType: form.ruleType,
+      severity: form.severity
+    })
+    const created = await createSkill({
+      skillName: draft.skillName,
+      skillCode: draft.skillCode,
+      version: draft.version,
+      projectType: draft.projectType || form.projectType || 'ALL',
+      ruleMatchingEnabled: draft.ruleMatchingEnabled ?? 1,
+      matchRules: draft.matchRules || '',
+      reviewGuidelines: draft.reviewGuidelines || draft.promptTemplate || draft.functionDescription || requirement,
+      status: 1
+    })
+    await loadBindings()
+    Object.assign(form, {
+      ruleName: draft.ruleName || draft.skillName,
+      ruleCode: draft.ruleCode || draft.skillCode,
+      ruleType: draft.ruleType || form.ruleType,
+      severity: draft.severity || form.severity,
+      projectType: draft.projectType || form.projectType,
+      promptTemplate: draft.promptTemplate,
+      skillId: created.id,
+      scriptId: undefined
+    })
+    ElMessage.success('AI 已生成 Skill 并填充规则草稿')
   } finally {
     generating.value = false
   }
 }
 
 function bindingText(row: Rule) {
-  if (row.ruleKind === 'AI') {
-    return skillOptions.value.find((item) => item.id === row.skillId)?.skillName || `Skill #${row.skillId || '-'}`
-  }
-  return scriptOptions.value.find((item) => item.id === row.scriptId)?.scriptName || `脚本 #${row.scriptId || '-'}`
+  return skillOptions.value.find((item) => item.id === row.skillId)?.skillName || `Skill #${row.skillId || '-'}`
 }
 
 function severityText(value: string) {

@@ -10,10 +10,8 @@ import com.cmbchina.codereview.common.exception.ErrorCode;
 import com.cmbchina.codereview.common.response.PageResponse;
 import com.cmbchina.codereview.infrastructure.persistence.entity.AiSkillEntity;
 import com.cmbchina.codereview.infrastructure.persistence.entity.ReviewRuleEntity;
-import com.cmbchina.codereview.infrastructure.persistence.entity.ScriptRuleEntity;
 import com.cmbchina.codereview.infrastructure.persistence.mapper.AiSkillMapper;
 import com.cmbchina.codereview.infrastructure.persistence.mapper.ReviewRuleMapper;
-import com.cmbchina.codereview.infrastructure.persistence.mapper.ScriptRuleMapper;
 import com.cmbchina.codereview.interfaces.dto.request.RuleCreateRequest;
 import com.cmbchina.codereview.interfaces.dto.request.RulePageRequest;
 import com.cmbchina.codereview.interfaces.dto.request.RuleUpdateRequest;
@@ -31,12 +29,9 @@ public class RuleAppService {
 
     private final AiSkillMapper aiSkillMapper;
 
-    private final ScriptRuleMapper scriptRuleMapper;
-
-    public RuleAppService(ReviewRuleMapper reviewRuleMapper, AiSkillMapper aiSkillMapper, ScriptRuleMapper scriptRuleMapper) {
+    public RuleAppService(ReviewRuleMapper reviewRuleMapper, AiSkillMapper aiSkillMapper) {
         this.reviewRuleMapper = reviewRuleMapper;
         this.aiSkillMapper = aiSkillMapper;
-        this.scriptRuleMapper = scriptRuleMapper;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -45,13 +40,13 @@ public class RuleAppService {
         ReviewRuleEntity entity = new ReviewRuleEntity();
         entity.setRuleName(request.getRuleName());
         entity.setRuleCode(request.getRuleCode());
-        entity.setRuleKind(request.getRuleKind());
+        entity.setRuleKind(RuleKind.AI.name());
         entity.setRuleType(request.getRuleType());
         entity.setSeverity(request.getSeverity());
         entity.setProjectType(defaultIfBlank(request.getProjectType(), "ALL"));
         entity.setPromptTemplate(request.getPromptTemplate());
         entity.setSkillId(request.getSkillId());
-        entity.setScriptId(request.getScriptId());
+        entity.setScriptId(null);
         entity.setSortOrder(request.getSortOrder() == null ? 0 : request.getSortOrder());
         entity.setStatus(BaseStatus.ENABLED.getValue());
         reviewRuleMapper.insert(entity);
@@ -66,13 +61,13 @@ public class RuleAppService {
         entity.setId(request.getId());
         entity.setRuleName(request.getRuleName());
         entity.setRuleCode(request.getRuleCode());
-        entity.setRuleKind(request.getRuleKind());
+        entity.setRuleKind(RuleKind.AI.name());
         entity.setRuleType(request.getRuleType());
         entity.setSeverity(request.getSeverity());
         entity.setProjectType(defaultIfBlank(request.getProjectType(), "ALL"));
         entity.setPromptTemplate(request.getPromptTemplate());
         entity.setSkillId(request.getSkillId());
-        entity.setScriptId(request.getScriptId());
+        entity.setScriptId(null);
         entity.setStatus(request.getStatus() == null ? BaseStatus.ENABLED.getValue() : request.getStatus());
         entity.setSortOrder(request.getSortOrder() == null ? 0 : request.getSortOrder());
         reviewRuleMapper.updateById(entity);
@@ -115,23 +110,15 @@ public class RuleAppService {
     }
 
     private void validateRuleBinding(String ruleKind, Long skillId, Long scriptId) {
-        if (RuleKind.AI.name().equalsIgnoreCase(ruleKind)) {
-            if (skillId == null) {
-                throw new BizException(ErrorCode.PARAM_ERROR, "AI 规则必须绑定 Skill");
-            }
-            AiSkillEntity skill = aiSkillMapper.selectById(skillId);
-            if (skill == null || skill.getStatus() == null || skill.getStatus() != BaseStatus.ENABLED.getValue()) {
-                throw new BizException(ErrorCode.PARAM_ERROR, "绑定的 Skill 不存在或未启用");
-            }
+        if (!RuleKind.AI.name().equalsIgnoreCase(ruleKind)) {
+            throw new BizException(ErrorCode.PARAM_ERROR, "检视规则仅支持 AI 类型，脚本规则请在脚本规则页面维护");
         }
-        if (RuleKind.SCRIPT.name().equalsIgnoreCase(ruleKind)) {
-            if (scriptId == null) {
-                throw new BizException(ErrorCode.PARAM_ERROR, "脚本规则必须绑定脚本");
-            }
-            ScriptRuleEntity script = scriptRuleMapper.selectById(scriptId);
-            if (script == null || script.getStatus() == null || script.getStatus() != BaseStatus.ENABLED.getValue()) {
-                throw new BizException(ErrorCode.PARAM_ERROR, "绑定的脚本不存在或未启用");
-            }
+        if (skillId == null) {
+            throw new BizException(ErrorCode.PARAM_ERROR, "AI 规则必须绑定 Skill");
+        }
+        AiSkillEntity skill = aiSkillMapper.selectById(skillId);
+        if (skill == null || skill.getStatus() == null || skill.getStatus() != BaseStatus.ENABLED.getValue()) {
+            throw new BizException(ErrorCode.PARAM_ERROR, "绑定的 Skill 不存在或未启用");
         }
     }
 

@@ -92,12 +92,15 @@
         <el-form-item label="仓库地址" prop="repoUrl">
           <el-input v-model="form.repoUrl" @blur="validateRepo">
             <template #append>
-              <el-button :loading="repoChecking" @click="validateRepo">校验</el-button>
+              <el-tooltip :content="repoCheckTooltip" placement="top" :disabled="!repoCheckMessage">
+                <el-button :loading="repoChecking" @click="validateRepo">
+                  <CheckCircle2 v-if="repoCheckMessage && repoCheckSuccess" :size="15" class="repo-check-icon is-success" />
+                  <XCircle v-else-if="repoCheckMessage" :size="15" class="repo-check-icon is-error" />
+                  校验
+                </el-button>
+              </el-tooltip>
             </template>
           </el-input>
-        </el-form-item>
-        <el-form-item v-if="repoCheckMessage" label="校验结果">
-          <el-tag :type="repoCheckSuccess ? 'success' : 'danger'" effect="plain">{{ repoCheckMessage }}</el-tag>
         </el-form-item>
         <el-form-item label="默认分支" prop="defaultBranch">
           <el-input v-model="form.defaultBranch" />
@@ -154,7 +157,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus/es/components/message/index.mjs'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index.mjs'
-import { Edit, Pause, Play, Plus, Rocket, Search, Trash2 } from 'lucide-vue-next'
+import { CheckCircle2, Edit, Pause, Play, Plus, Rocket, Search, Trash2, XCircle } from 'lucide-vue-next'
 import {
   createProject,
   deleteProject,
@@ -178,6 +181,8 @@ const projects = ref<Project[]>([])
 const total = ref(0)
 const repoCheckMessage = ref('')
 const repoCheckSuccess = ref(false)
+
+const repoCheckTooltip = computed(() => repoCheckMessage.value || '点击校验仓库地址')
 
 const query = reactive({
   projectName: '',
@@ -285,6 +290,8 @@ function openCreate() {
 }
 
 function openEdit(row: Project) {
+  repoCheckMessage.value = ''
+  repoCheckSuccess.value = false
   editingId.value = row.id
   Object.assign(form, {
     id: row.id,
@@ -324,6 +331,9 @@ async function validateRepo() {
     })
     repoCheckSuccess.value = result.success
     repoCheckMessage.value = result.message
+  } catch (error) {
+    repoCheckSuccess.value = false
+    repoCheckMessage.value = error instanceof Error ? error.message : '仓库校验失败'
   } finally {
     repoChecking.value = false
   }
@@ -393,3 +403,17 @@ async function removeProject(row: Project) {
 
 onMounted(loadProjects)
 </script>
+
+<style scoped>
+.repo-check-icon {
+  margin-right: 4px;
+}
+
+.repo-check-icon.is-success {
+  color: var(--el-color-success);
+}
+
+.repo-check-icon.is-error {
+  color: var(--el-color-danger);
+}
+</style>

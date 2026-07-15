@@ -18,17 +18,23 @@ public class ScriptUpdateRequest {
     private String scriptCode;
 
     @NotBlank(message = "不能为空")
-    private String scriptLanguage;
+    private String projectType = "ALL";
+
+    @NotBlank(message = "不能为空")
+    private String ruleType = "CUSTOM";
+
+    @NotBlank(message = "不能为空")
+    private String severity = "MAJOR";
+
+    private String description;
 
     @NotBlank(message = "不能为空")
     private String scriptContent;
 
-    private String parameterTemplate;
-
     @Min(value = 1, message = "必须大于 0")
     private Integer timeoutSeconds;
 
-    private Integer generatedByAi;
-
     private Integer status;
+
+    private Integer sortOrder;
 }

@@ -7,6 +7,10 @@ export interface ReviewIssue {
   projectId: number
   ruleId?: number
   skillId?: number
+  scriptId?: number
+  ruleName?: string
+  skillName?: string
+  scriptName?: string
   issueSource: string
   severity: string
   issueType: string

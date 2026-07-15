@@ -87,6 +87,9 @@ public class AiReviewExecutor {
                 project,
                 rule,
                 skill.getId(),
+                skill.getSkillName(),
+                null,
+                null,
                 IssueSource.AI,
                 chunk.getFilePath()
             );

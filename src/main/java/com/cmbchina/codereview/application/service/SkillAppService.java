@@ -37,20 +37,14 @@ public class SkillAppService {
 
     @Transactional(rollbackFor = Exception.class)
     public Long create(SkillCreateRequest request) {
-        SchemaValidateResponse validateResponse = validateSchema(request.getParametersSchema());
-        if (!validateResponse.getValid()) {
-            throw new BizException(ErrorCode.PARAM_ERROR, validateResponse.getMessage());
-        }
         AiSkillEntity entity = new AiSkillEntity();
         entity.setSkillName(request.getSkillName());
         entity.setSkillCode(request.getSkillCode());
-        entity.setFunctionName(request.getFunctionName());
-        entity.setFunctionDescription(request.getFunctionDescription());
-        entity.setParametersSchema(request.getParametersSchema());
         entity.setVersion(defaultIfBlank(request.getVersion(), "1.0.0"));
         entity.setProjectType(normalizeProjectType(request.getProjectType()));
         entity.setRuleMatchingEnabled(request.getRuleMatchingEnabled() == null ? 0 : request.getRuleMatchingEnabled());
         entity.setMatchRules(request.getMatchRules());
+        entity.setReviewGuidelines(request.getReviewGuidelines());
         entity.setStatus(BaseStatus.ENABLED.getValue());
         aiSkillMapper.insert(entity);
         return entity.getId();
@@ -59,21 +53,15 @@ public class SkillAppService {
     @Transactional(rollbackFor = Exception.class)
     public void update(SkillUpdateRequest request) {
         ensureExists(request.getId());
-        SchemaValidateResponse validateResponse = validateSchema(request.getParametersSchema());
-        if (!validateResponse.getValid()) {
-            throw new BizException(ErrorCode.PARAM_ERROR, validateResponse.getMessage());
-        }
         AiSkillEntity entity = new AiSkillEntity();
         entity.setId(request.getId());
         entity.setSkillName(request.getSkillName());
         entity.setSkillCode(request.getSkillCode());
-        entity.setFunctionName(request.getFunctionName());
-        entity.setFunctionDescription(request.getFunctionDescription());
-        entity.setParametersSchema(request.getParametersSchema());
         entity.setVersion(defaultIfBlank(request.getVersion(), "1.0.0"));
         entity.setProjectType(normalizeProjectType(request.getProjectType()));
         entity.setRuleMatchingEnabled(request.getRuleMatchingEnabled() == null ? 0 : request.getRuleMatchingEnabled());
         entity.setMatchRules(request.getMatchRules());
+        entity.setReviewGuidelines(request.getReviewGuidelines());
         entity.setStatus(request.getStatus() == null ? BaseStatus.ENABLED.getValue() : request.getStatus());
         aiSkillMapper.updateById(entity);
     }
@@ -156,13 +144,11 @@ public class SkillAppService {
         response.setId(entity.getId());
         response.setSkillName(entity.getSkillName());
         response.setSkillCode(entity.getSkillCode());
-        response.setFunctionName(entity.getFunctionName());
-        response.setFunctionDescription(entity.getFunctionDescription());
-        response.setParametersSchema(entity.getParametersSchema());
         response.setVersion(entity.getVersion());
         response.setProjectType(defaultIfBlank(entity.getProjectType(), "ALL"));
         response.setRuleMatchingEnabled(entity.getRuleMatchingEnabled() == null ? 0 : entity.getRuleMatchingEnabled());
         response.setMatchRules(entity.getMatchRules());
+        response.setReviewGuidelines(entity.getReviewGuidelines());
         response.setStatus(entity.getStatus());
         return response;
     }

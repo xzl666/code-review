@@ -9,7 +9,9 @@ public class ScriptPageRequest extends PageRequest {
 
     private String scriptName;
 
-    private String scriptLanguage;
+    private String scriptCode;
+
+    private String projectType;
 
     private Integer status;
 }

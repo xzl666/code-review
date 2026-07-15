@@ -9,8 +9,6 @@ public class ScriptTestRunRequest {
 
     private Long scriptId;
 
-    private String scriptLanguage;
-
     @NotBlank(message = "不能为空")
     private String scriptContent;
 

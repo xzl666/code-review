@@ -5,9 +5,14 @@ import com.cmbchina.codereview.common.response.ApiResponse;
 import com.cmbchina.codereview.infrastructure.ai.DeepSeekProperties;
 import com.cmbchina.codereview.interfaces.dto.request.DefaultTokenUpdateRequest;
 import com.cmbchina.codereview.interfaces.dto.request.DeepSeekConfigUpdateRequest;
+import com.cmbchina.codereview.interfaces.dto.request.IdRequest;
+import com.cmbchina.codereview.interfaces.dto.request.ModelConfigSaveRequest;
+import com.cmbchina.codereview.interfaces.dto.request.ModelConfigValidateRequest;
 import com.cmbchina.codereview.interfaces.dto.response.ConfigValidationResponse;
 import com.cmbchina.codereview.interfaces.dto.response.DefaultTokenResponse;
 import com.cmbchina.codereview.interfaces.dto.response.DeepSeekConfigResponse;
+import com.cmbchina.codereview.interfaces.dto.response.ModelConfigResponse;
+import java.util.List;
 import javax.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -66,5 +71,33 @@ public class SystemConfigController {
             deepSeekProperties.getUrl(),
             deepSeekProperties.getModel()
         ));
+    }
+
+    @PostMapping("/model-config/list")
+    public ApiResponse<List<ModelConfigResponse>> listModelConfigs() {
+        return ApiResponse.success(systemConfigAppService.listModelConfigs());
+    }
+
+    @PostMapping("/model-config/save")
+    public ApiResponse<Void> saveModelConfig(@Valid @RequestBody ModelConfigSaveRequest request) {
+        systemConfigAppService.saveModelConfig(request);
+        return ApiResponse.success();
+    }
+
+    @PostMapping("/model-config/enable")
+    public ApiResponse<Void> enableModelConfig(@Valid @RequestBody IdRequest request) {
+        systemConfigAppService.enableModelConfig(request.getId());
+        return ApiResponse.success();
+    }
+
+    @PostMapping("/model-config/delete")
+    public ApiResponse<Void> deleteModelConfig(@Valid @RequestBody IdRequest request) {
+        systemConfigAppService.deleteModelConfig(request.getId());
+        return ApiResponse.success();
+    }
+
+    @PostMapping("/model-config/validate")
+    public ApiResponse<ConfigValidationResponse> validateModelConfig(@RequestBody(required = false) ModelConfigValidateRequest request) {
+        return ApiResponse.success(systemConfigAppService.validateModelConfig(request));
     }
 }

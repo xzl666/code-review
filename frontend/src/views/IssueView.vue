@@ -52,14 +52,57 @@
           </template>
         </el-table-column>
         <el-table-column prop="issueSource" label="来源" width="90" />
-        <el-table-column label="检视任务" width="180" show-overflow-tooltip>
-          <template #default="{ row }">{{ taskText(row) }}</template>
+        <el-table-column label="命中规则" min-width="190">
+          <template #default="{ row }">
+            <span
+              class="table-ellipsis"
+              @mouseenter="showIssueTooltip($event, sourceTraceText(row))"
+              @mousemove="moveIssueTooltip"
+              @mouseleave="hideIssueTooltip"
+            >
+              {{ sourceTraceText(row) }}
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="检视任务" width="180">
+          <template #default="{ row }">
+            <span
+              class="table-ellipsis"
+              @mouseenter="showIssueTooltip($event, taskText(row))"
+              @mousemove="moveIssueTooltip"
+              @mouseleave="hideIssueTooltip"
+            >
+              {{ taskText(row) }}
+            </span>
+          </template>
         </el-table-column>
         <el-table-column label="问题类型" width="120">
           <template #default="{ row }">{{ issueTypeText(row.issueType) }}</template>
         </el-table-column>
-        <el-table-column prop="summary" label="摘要" min-width="220" show-overflow-tooltip />
-        <el-table-column prop="filePath" label="文件" min-width="260" show-overflow-tooltip />
+        <el-table-column label="摘要" min-width="220">
+          <template #default="{ row }">
+            <span
+              class="table-ellipsis"
+              @mouseenter="showIssueTooltip($event, row.summary || '')"
+              @mousemove="moveIssueTooltip"
+              @mouseleave="hideIssueTooltip"
+            >
+              {{ row.summary }}
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="文件" min-width="260">
+          <template #default="{ row }">
+            <span
+              class="table-ellipsis"
+              @mouseenter="showIssueTooltip($event, row.filePath || '')"
+              @mousemove="moveIssueTooltip"
+              @mouseleave="hideIssueTooltip"
+            >
+              {{ row.filePath }}
+            </span>
+          </template>
+        </el-table-column>
         <el-table-column label="起始行" width="90">
           <template #default="{ row }">{{ lineText(row.startLine) }}</template>
         </el-table-column>
@@ -107,6 +150,8 @@
             <div><span>状态</span><strong>{{ statusText(detail.status) }}</strong></div>
             <div><span>问题类型</span><strong>{{ issueTypeText(detail.issueType) }}</strong></div>
             <div><span>检查时间</span><strong>{{ formatTime(detail.createTime) }}</strong></div>
+            <div><span>命中规则</span><strong>{{ detail.ruleName || idText('规则', detail.ruleId) }}</strong></div>
+            <div><span>{{ detail.issueSource === 'SCRIPT' ? '脚本' : 'Skill' }}</span><strong>{{ sourceBindingName(detail) }}</strong></div>
           </div>
         </section>
 
@@ -154,6 +199,16 @@
         </section>
       </div>
     </el-dialog>
+
+    <teleport to="body">
+      <div
+        v-if="issueTooltip.visible"
+        class="cursor-tooltip"
+        :style="{ left: `${issueTooltip.x}px`, top: `${issueTooltip.y}px` }"
+      >
+        {{ issueTooltip.content }}
+      </div>
+    </teleport>
   </div>
 </template>
 
@@ -164,6 +219,7 @@ import { ElMessage } from 'element-plus/es/components/message/index.mjs'
 import { Download, ExternalLink, Eye, Search } from 'lucide-vue-next'
 import { pageProjects, type Project } from '@/api/project'
 import { exportIssues, getIssue, ignoreIssue, markIssueFixed, pageIssues, type ReviewIssue } from '@/api/issue'
+import { issueTypeText } from '@/utils/dictionaries'
 
 const loading = ref(false)
 const detailVisible = ref(false)
@@ -174,6 +230,12 @@ const total = ref(0)
 const taskKeyword = ref('')
 const route = useRoute()
 const router = useRouter()
+const issueTooltip = reactive({
+  visible: false,
+  content: '',
+  x: 0,
+  y: 0
+})
 
 const query = reactive({
   taskId: undefined as number | undefined,
@@ -295,21 +357,6 @@ function statusText(status: string) {
   return ({ OPEN: '打开', IGNORED: '已忽略', FIXED: '已修复' } as Record<string, string>)[status] || status
 }
 
-function issueTypeText(issueType?: string) {
-  if (!issueType) {
-    return '-'
-  }
-  return ({
-    BUG: '缺陷',
-    SECURITY: '安全',
-    PERFORMANCE: '性能',
-    RELIABILITY: '可靠性',
-    MAINTAINABILITY: '可维护性',
-    STYLE: '代码规范',
-    CUSTOM: '自定义'
-  } as Record<string, string>)[issueType] || issueType
-}
-
 function lineText(line?: number) {
   return line && line > 0 ? line : '-'
 }
@@ -336,6 +383,23 @@ function clearTaskFilter() {
 
 function taskText(issue: ReviewIssue) {
   return issue.taskNo ? `${issue.taskNo} (#${issue.taskId})` : `#${issue.taskId}`
+}
+
+function sourceTraceText(issue: ReviewIssue) {
+  const rule = issue.ruleName || idText('规则', issue.ruleId)
+  const binding = sourceBindingName(issue)
+  return binding === '-' ? rule : `${rule} / ${binding}`
+}
+
+function sourceBindingName(issue: ReviewIssue) {
+  if (issue.issueSource === 'SCRIPT') {
+    return issue.scriptName || idText('脚本', issue.scriptId)
+  }
+  return issue.skillName || idText('Skill', issue.skillId)
+}
+
+function idText(label: string, id?: number) {
+  return id ? `${label} #${id}` : '-'
 }
 
 function formatTime(value?: string) {
@@ -378,6 +442,29 @@ function snippetFromRawResponse(rawResponse?: string) {
   } catch {
     return ''
   }
+}
+
+function showIssueTooltip(event: MouseEvent, content: string) {
+  issueTooltip.content = content
+  issueTooltip.visible = true
+  updateIssueTooltipPosition(event)
+}
+
+function moveIssueTooltip(event: MouseEvent) {
+  if (issueTooltip.visible) {
+    updateIssueTooltipPosition(event)
+  }
+}
+
+function hideIssueTooltip() {
+  issueTooltip.visible = false
+}
+
+function updateIssueTooltipPosition(event: MouseEvent) {
+  const offset = 12
+  const maxTooltipWidth = Math.min(520, window.innerWidth - 32)
+  issueTooltip.x = Math.max(16, Math.min(event.clientX + offset, window.innerWidth - maxTooltipWidth - 16))
+  issueTooltip.y = Math.max(16, Math.min(event.clientY + offset, window.innerHeight - 48))
 }
 
 onMounted(() => {

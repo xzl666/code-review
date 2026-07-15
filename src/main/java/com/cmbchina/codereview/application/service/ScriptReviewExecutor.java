@@ -6,7 +6,6 @@ import com.cmbchina.codereview.common.exception.ErrorCode;
 import com.cmbchina.codereview.domain.project.Project;
 import com.cmbchina.codereview.infrastructure.git.GitDiffSummary;
 import com.cmbchina.codereview.infrastructure.persistence.entity.ReviewIssueEntity;
-import com.cmbchina.codereview.infrastructure.persistence.entity.ReviewRuleEntity;
 import com.cmbchina.codereview.infrastructure.persistence.entity.ScriptRuleEntity;
 import com.cmbchina.codereview.infrastructure.persistence.mapper.ReviewIssueMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -37,22 +36,38 @@ public class ScriptReviewExecutor {
         this.scriptSandboxExecutor = scriptSandboxExecutor;
     }
 
-    public int execute(Long taskId,
-                       Project project,
-                       ReviewRuleEntity rule,
-                       ScriptRuleEntity script,
-                       GitDiffSummary diffSummary,
-                       String branch) {
-        String stdout = runScript(project, script, diffSummary, branch);
-        return saveIssues(taskId, project, rule, stdout);
+    public ScriptRuleExecutionResult execute(Long taskId,
+                                             Project project,
+                                             List<ScriptRuleEntity> scripts,
+                                             GitDiffSummary diffSummary,
+                                             String branch,
+                                             Integer reviewDays) {
+        ScriptRuleExecutionResult executionResult = new ScriptRuleExecutionResult();
+        if (scripts == null || scripts.isEmpty()) {
+            return executionResult;
+        }
+        for (ScriptRuleEntity script : scripts) {
+            try {
+                String stdout = runScript(project, script, diffSummary, branch, reviewDays);
+                executionResult.addIssueCount(saveIssues(taskId, project, script, stdout));
+            } catch (Exception exception) {
+                executionResult.addWarning(limit("Script review skipped for "
+                    + sourceName(script.getScriptName(), script.getId()) + ": " + exception.getMessage(), 500));
+            }
+        }
+        return executionResult;
     }
 
-    private String runScript(Project project, ScriptRuleEntity script, GitDiffSummary diffSummary, String branch) {
+    private String runScript(Project project,
+                             ScriptRuleEntity script,
+                             GitDiffSummary diffSummary,
+                             String branch,
+                             Integer reviewDays) {
         try {
             ScriptExecutionRequest request = new ScriptExecutionRequest();
-            request.setLanguage(script.getScriptLanguage());
+            request.setLanguage("PYTHON");
             request.setContent(script.getScriptContent());
-            request.setInputJson(inputJson(project, diffSummary, branch));
+            request.setInputJson(inputJson(project, diffSummary, branch, reviewDays));
             request.setTimeoutSeconds(script.getTimeoutSeconds());
             request.setMaxOutputChars(200000);
             ScriptExecutionResult result = scriptSandboxExecutor.execute(request);
@@ -65,6 +80,7 @@ public class ScriptReviewExecutor {
             if (!Boolean.TRUE.equals(result.getSuccess())) {
                 throw new BizException(ErrorCode.BIZ_ERROR, "script execution failed: " + script.getScriptName() + "; " + result.getStderr());
             }
+            validateIssueJson(result.getStdout());
             return limit(result.getStdout(), 200000);
         } catch (BizException exception) {
             throw exception;
@@ -73,7 +89,7 @@ public class ScriptReviewExecutor {
         }
     }
 
-    private int saveIssues(Long taskId, Project project, ReviewRuleEntity rule, String stdout) {
+    private int saveIssues(Long taskId, Project project, ScriptRuleEntity script, String stdout) {
         if (!StringUtils.hasText(stdout)) {
             return 0;
         }
@@ -82,10 +98,16 @@ public class ScriptReviewExecutor {
                 stdout,
                 taskId,
                 project,
-                rule,
-                rule.getSkillId(),
+                null,
+                null,
+                null,
+                script.getId(),
+                script.getScriptName(),
                 IssueSource.SCRIPT,
-                ""
+                "",
+                defaultIfBlank(script.getSeverity(), "MAJOR"),
+                defaultIfBlank(script.getRuleType(), "CUSTOM"),
+                defaultIfBlank(script.getScriptName(), "脚本规则")
             );
             for (ReviewIssueEntity entity : issues) {
                 reviewIssueMapper.insert(entity);
@@ -96,19 +118,30 @@ public class ScriptReviewExecutor {
         }
     }
 
-    private String inputJson(Project project, GitDiffSummary diffSummary, String branch) throws Exception {
+    private String inputJson(Project project, GitDiffSummary diffSummary, String branch, Integer reviewDays) throws Exception {
         Map<String, Object> input = new LinkedHashMap<>();
-        input.put("projectId", project.getId());
-        input.put("projectName", project.getProjectName());
-        input.put("projectCode", project.getProjectCode());
-        input.put("projectType", project.getProjectType());
+        Map<String, Object> projectInput = new LinkedHashMap<>();
+        projectInput.put("id", project.getId());
+        projectInput.put("name", project.getProjectName());
+        projectInput.put("code", project.getProjectCode());
+        projectInput.put("type", project.getProjectType());
+        input.put("project", projectInput);
         input.put("branch", branch);
-        input.put("reviewDays", project.getReviewDays());
+        input.put("reviewDays", reviewDays);
         input.put("commitCount", diffSummary.getCommitCount());
         input.put("diffFileCount", diffSummary.getDiffFileCount());
         input.put("filePaths", diffSummary.getFilePaths());
         input.put("diffContent", diffSummary.getDiffContent());
+        input.put("files", diffSummary.getFiles());
         return objectMapper.writeValueAsString(input);
+    }
+
+    private void validateIssueJson(String stdout) throws Exception {
+        com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(stdout);
+        com.fasterxml.jackson.databind.JsonNode issues = root.isArray() ? root : root.get("issues");
+        if (issues == null || !issues.isArray()) {
+            throw new BizException(ErrorCode.BIZ_ERROR, "script output must be JSON with issues array");
+        }
     }
 
     private String limit(String value, int maxLength) {
@@ -116,5 +149,13 @@ public class ScriptReviewExecutor {
             return value;
         }
         return value.substring(0, maxLength);
+    }
+
+    private String sourceName(String name, Long id) {
+        return StringUtils.hasText(name) ? name + " (#" + id + ")" : "#" + id;
+    }
+
+    private String defaultIfBlank(String value, String defaultValue) {
+        return StringUtils.hasText(value) ? value : defaultValue;
     }
 }

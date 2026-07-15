@@ -29,11 +29,22 @@
         <el-tag effect="plain">共 {{ total }} 条</el-tag>
       </div>
       <el-table v-loading="loading" :data="tasks" stripe class="data-table">
-        <el-table-column prop="taskNo" label="任务编号" min-width="180" show-overflow-tooltip />
+        <el-table-column label="任务编号" min-width="180">
+          <template #default="{ row }">
+            <span
+              class="task-no-cell"
+              @mouseenter="showTaskNoTooltip($event, row.taskNo)"
+              @mousemove="moveTaskNoTooltip"
+              @mouseleave="hideTaskNoTooltip"
+            >
+              {{ row.taskNo }}
+            </span>
+          </template>
+        </el-table-column>
         <el-table-column prop="projectName" label="项目" min-width="150" />
         <el-table-column prop="status" label="状态" width="110">
           <template #default="{ row }">
-            <el-tag :type="statusType(row.status)">{{ statusText(row.status) }}</el-tag>
+            <el-tag :type="statusType(row.status)" effect="plain">{{ statusText(row.status) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="reviewBranch" label="分支" width="110" />
@@ -99,7 +110,13 @@
       <div v-if="detail" class="detail-grid">
         <div><span>任务编号</span><strong>{{ detail.taskNo }}</strong></div>
         <div><span>项目</span><strong>{{ detail.projectName }}</strong></div>
-        <div><span>状态</span><el-tag :type="statusType(detail.status)">{{ statusText(detail.status) }}</el-tag></div>
+        <div>
+          <span>状态</span>
+          <strong class="status-inline" :class="statusClass(detail.status)">
+            <i class="status-dot" />
+            {{ statusText(detail.status) }}
+          </strong>
+        </div>
         <div><span>分支</span><strong>{{ detail.reviewBranch }}</strong></div>
         <div><span>检视天数</span><strong>{{ detail.reviewDays }}</strong></div>
         <div><span>提交/文件/问题</span><strong>{{ detail.commitCount }} / {{ detail.diffFileCount }} / {{ detail.issueCount }}</strong></div>
@@ -116,6 +133,16 @@
     <el-dialog v-model="reportVisible" :title="report?.reportTitle || '检视报告'" width="980px" class="report-dialog">
       <div v-if="report" class="report-content" v-html="report.reportContent" />
     </el-dialog>
+
+    <teleport to="body">
+      <div
+        v-if="taskNoTooltip.visible"
+        class="cursor-tooltip"
+        :style="{ left: `${taskNoTooltip.x}px`, top: `${taskNoTooltip.y}px` }"
+      >
+        {{ taskNoTooltip.content }}
+      </div>
+    </teleport>
   </div>
 </template>
 
@@ -149,6 +176,12 @@ const total = ref(0)
 const projectOptions = ref<Project[]>([])
 const router = useRouter()
 let refreshTimer: number | undefined
+const taskNoTooltip = reactive({
+  visible: false,
+  content: '',
+  x: 0,
+  y: 0
+})
 
 const query = reactive({
   projectName: '',
@@ -264,12 +297,39 @@ function statusType(status: string) {
   return ({ SUCCESS: 'success', FAILED: 'danger', RUNNING: 'warning', PENDING: 'primary', CANCELED: 'info' } as Record<string, string>)[status] || 'info'
 }
 
+function statusClass(status: string) {
+  return `status-${String(status || '').toLowerCase()}`
+}
+
 function hasSkipped(task: ReviewTask) {
   return (task.skippedCommitCount || 0) > 0 || (task.skippedFileCount || 0) > 0
 }
 
 function isFinished(task: ReviewTask) {
   return ['SUCCESS', 'FAILED', 'CANCELED'].includes(task.status)
+}
+
+function showTaskNoTooltip(event: MouseEvent, content: string) {
+  taskNoTooltip.content = content
+  taskNoTooltip.visible = true
+  updateTaskNoTooltipPosition(event)
+}
+
+function moveTaskNoTooltip(event: MouseEvent) {
+  if (taskNoTooltip.visible) {
+    updateTaskNoTooltipPosition(event)
+  }
+}
+
+function hideTaskNoTooltip() {
+  taskNoTooltip.visible = false
+}
+
+function updateTaskNoTooltipPosition(event: MouseEvent) {
+  const offset = 12
+  const maxTooltipWidth = Math.min(520, window.innerWidth - 32)
+  taskNoTooltip.x = Math.max(16, Math.min(event.clientX + offset, window.innerWidth - maxTooltipWidth - 16))
+  taskNoTooltip.y = Math.max(16, Math.min(event.clientY + offset, window.innerHeight - 48))
 }
 
 onMounted(() => {
@@ -284,3 +344,70 @@ onBeforeUnmount(() => {
   }
 })
 </script>
+
+<style scoped>
+.task-no-cell {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  position: relative;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.status-inline {
+  align-items: center;
+  color: #475569;
+  display: inline-flex;
+  gap: 6px;
+  line-height: 20px;
+}
+
+.status-dot {
+  border-radius: 999px;
+  display: inline-block;
+  height: 7px;
+  width: 7px;
+}
+
+.status-success {
+  color: #047857;
+}
+
+.status-success .status-dot {
+  background: #10b981;
+}
+
+.status-failed {
+  color: #b91c1c;
+}
+
+.status-failed .status-dot {
+  background: #ef4444;
+}
+
+.status-running {
+  color: #b45309;
+}
+
+.status-running .status-dot {
+  background: #f59e0b;
+}
+
+.status-pending {
+  color: #1d4ed8;
+}
+
+.status-pending .status-dot {
+  background: #3b82f6;
+}
+
+.status-canceled {
+  color: #64748b;
+}
+
+.status-canceled .status-dot {
+  background: #94a3b8;
+}
+</style>

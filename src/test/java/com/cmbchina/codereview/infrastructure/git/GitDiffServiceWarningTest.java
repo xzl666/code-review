@@ -22,6 +22,6 @@ class GitDiffServiceWarningTest {
 
         assertThat(warnings)
             .contains("Skipped 2 oversized or timed-out commits.")
-            .contains("Skipped 7 files due to review limits or diff timeouts.");
+            .contains("Skipped 7 files because their git diff commands failed or timed out.");
     }
 }

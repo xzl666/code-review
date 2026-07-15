@@ -4,13 +4,11 @@ export interface Skill {
   id: number
   skillName: string
   skillCode: string
-  functionName: string
-  functionDescription?: string
-  parametersSchema: string
   version: string
   projectType: string
   ruleMatchingEnabled: number
   matchRules?: string
+  reviewGuidelines: string
   status: number
 }
 
@@ -18,13 +16,11 @@ export interface SkillForm {
   id?: number
   skillName: string
   skillCode: string
-  functionName: string
-  functionDescription?: string
-  parametersSchema: string
   version: string
   projectType: string
   ruleMatchingEnabled: number
   matchRules?: string
+  reviewGuidelines: string
   status?: number
 }
 
@@ -47,9 +43,10 @@ export interface AiGenerateSkillRequest {
 export interface AiGeneratedSkillDraft {
   skillName: string
   skillCode: string
-  functionName: string
+  functionName?: string
   functionDescription?: string
-  parametersSchema: string
+  parametersSchema?: string
+  reviewGuidelines?: string
   version: string
   ruleName?: string
   ruleCode?: string

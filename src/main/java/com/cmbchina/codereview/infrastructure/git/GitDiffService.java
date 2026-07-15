@@ -32,22 +32,23 @@ public class GitDiffService {
             summary.setDiffFileCount(0);
             summary.setFilePaths(java.util.Collections.emptyList());
             summary.setDiffContent("");
+            summary.setFiles(java.util.Collections.emptyList());
             return summary;
         }
 
         String diffBase = diffBase(repoDir, commits.get(commits.size() - 1));
         DiffFileCollection fileCollection = collectChangedFiles(repoDir, commits);
-        List<String> files = limitList(fileCollection.files, safeLimit(properties.getMaxFilesPerTask(), 30));
-        int skippedFilesByLimit = Math.max(0, fileCollection.files.size() - files.size());
+        List<String> files = fileCollection.files;
         DiffContentCollection diffContent = collectDiffContent(repoDir, diffBase, files);
 
         GitDiffSummary summary = new GitDiffSummary();
         summary.setCommitCount(commits.size());
         summary.setDiffFileCount(files.size());
         summary.setFilePaths(files);
-        summary.setDiffContent(limit(diffContent.content, safeLimit(properties.getMaxDiffCharsPerTask(), 200000)));
+        summary.setDiffContent(diffContent.content);
+        summary.setFiles(diffContent.files);
         summary.setSkippedCommitCount(fileCollection.skippedCommits);
-        summary.setSkippedFileCount(fileCollection.skippedFiles + skippedFilesByLimit + diffContent.skippedFiles);
+        summary.setSkippedFileCount(fileCollection.skippedFiles + diffContent.skippedFiles);
         summary.setWarnings(warnings(summary));
         return summary;
     }
@@ -77,15 +78,7 @@ public class GitDiffService {
                 collection.skippedCommits++;
                 continue;
             }
-            if (commitFiles.size() > safeLimit(properties.getMaxFilesPerCommit(), 80)) {
-                collection.skippedCommits++;
-                collection.skippedFiles += commitFiles.size();
-                continue;
-            }
             files.addAll(commitFiles);
-            if (files.size() >= safeLimit(properties.getMaxFilesPerTask(), 30)) {
-                break;
-            }
         }
         collection.files = new ArrayList<>(files);
         return collection;
@@ -94,8 +87,7 @@ public class GitDiffService {
     private DiffContentCollection collectDiffContent(Path repoDir, String diffBase, List<String> files) {
         DiffContentCollection collection = new DiffContentCollection();
         StringBuilder builder = new StringBuilder();
-        int maxFiles = Math.min(files.size(), safeLimit(properties.getMaxFilesPerTask(), 30));
-        for (int i = 0; i < maxFiles; i++) {
+        for (int i = 0; i < files.size(); i++) {
             String file = files.get(i);
             String output;
             try {
@@ -104,13 +96,10 @@ public class GitDiffService {
                 collection.skippedFiles++;
                 continue;
             }
-            builder.append(limit(output, safeLimit(properties.getMaxDiffCharsPerFile(), 30000))).append('\n');
-            if (builder.length() >= safeLimit(properties.getMaxDiffCharsPerTask(), 200000)) {
-                collection.skippedFiles += Math.max(0, files.size() - i - 1);
-                break;
-            }
+            collection.files.add(new GitDiffFile(file, output));
+            builder.append(output).append('\n');
         }
-        collection.content = limit(builder.toString(), safeLimit(properties.getMaxDiffCharsPerTask(), 200000));
+        collection.content = builder.toString();
         return collection;
     }
 
@@ -144,7 +133,7 @@ public class GitDiffService {
             warnings.add("Skipped " + summary.getSkippedCommitCount() + " oversized or timed-out commits.");
         }
         if (summary.getSkippedFileCount() != null && summary.getSkippedFileCount() > 0) {
-            warnings.add("Skipped " + summary.getSkippedFileCount() + " files due to review limits or diff timeouts.");
+            warnings.add("Skipped " + summary.getSkippedFileCount() + " files because their git diff commands failed or timed out.");
         }
         return warnings;
     }
@@ -157,6 +146,7 @@ public class GitDiffService {
 
     private static class DiffContentCollection {
         private String content = "";
+        private List<GitDiffFile> files = new ArrayList<>();
         private int skippedFiles;
     }
 }

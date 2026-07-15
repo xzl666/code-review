@@ -56,20 +56,17 @@ CREATE TABLE IF NOT EXISTS cr_ai_skill (
   id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
   skill_name VARCHAR(128) NOT NULL COMMENT 'Skill 名称',
   skill_code VARCHAR(64) NOT NULL COMMENT 'Skill 编码',
-  function_name VARCHAR(128) NOT NULL COMMENT 'Function Calling 函数名',
-  function_description VARCHAR(512) DEFAULT NULL COMMENT '函数描述',
-  parameters_schema MEDIUMTEXT NOT NULL COMMENT 'JSON Schema 定义',
   version VARCHAR(32) NOT NULL DEFAULT '1.0.0' COMMENT '版本号',
   project_type VARCHAR(32) NOT NULL DEFAULT 'ALL' COMMENT '适用项目类型：ALL/FRONTEND/BACKEND',
   rule_matching_enabled TINYINT NOT NULL DEFAULT 0 COMMENT '是否启用 Skill 匹配规则',
   match_rules TEXT COMMENT 'Skill 匹配规则',
+  review_guidelines MEDIUMTEXT COMMENT 'Skill 检视关注点',
   status TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1 启用，0 停用',
   create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   deleted TINYINT NOT NULL DEFAULT 0 COMMENT '逻辑删除',
   PRIMARY KEY (id),
   KEY idx_skill_code (skill_code),
-  KEY idx_function_name (function_name),
   KEY idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI Skill 表';
 
@@ -77,19 +74,84 @@ CREATE TABLE IF NOT EXISTS cr_script_rule (
   id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
   script_name VARCHAR(128) NOT NULL COMMENT '脚本名称',
   script_code VARCHAR(64) NOT NULL COMMENT '脚本编码',
-  script_language VARCHAR(32) NOT NULL COMMENT '脚本语言：SHELL/PYTHON/NODE',
+  project_type VARCHAR(32) NOT NULL DEFAULT 'ALL' COMMENT '适用项目类型：ALL/FRONTEND/BACKEND',
+  rule_type VARCHAR(32) NOT NULL DEFAULT 'CUSTOM' COMMENT '问题类型',
+  severity VARCHAR(32) NOT NULL DEFAULT 'MAJOR' COMMENT '默认严重等级',
+  description VARCHAR(512) DEFAULT NULL COMMENT '规则说明',
   script_content MEDIUMTEXT NOT NULL COMMENT '脚本内容',
-  parameter_template TEXT COMMENT '参数模板',
   timeout_seconds INT NOT NULL DEFAULT 30 COMMENT '超时时间',
-  generated_by_ai TINYINT NOT NULL DEFAULT 0 COMMENT '是否由 AI 生成',
   status TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1 启用，0 停用',
+  sort_order INT NOT NULL DEFAULT 0 COMMENT '排序',
   create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   deleted TINYINT NOT NULL DEFAULT 0 COMMENT '逻辑删除',
   PRIMARY KEY (id),
   KEY idx_script_code (script_code),
+  KEY idx_project_type (project_type),
   KEY idx_status (status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='脚本规则表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Python 脚本规则表';
+
+INSERT INTO cr_script_rule
+(script_name, script_code, project_type, rule_type, severity, description, script_content, timeout_seconds, status, sort_order)
+SELECT '后端 Java 命名规范检查',
+       'DEFAULT_BACKEND_JAVA_NAMING',
+       'BACKEND',
+       'NAMING',
+       'MINOR',
+       '检查 Java diff 新增行中的类名、方法名、变量名、常量名和包名命名规范。',
+       'import json, re, sys
+data = json.load(sys.stdin)
+issues = []
+upper = re.compile(r"^[A-Z][A-Za-z0-9]*$")
+lower = re.compile(r"^[a-z][A-Za-z0-9]*$")
+constant = re.compile(r"^[A-Z][A-Z0-9_]*$")
+package = re.compile(r"^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)*$")
+def add(file_path, line, summary, detail, suggestion, snippet):
+    issues.append({"severity":"MINOR","issueType":"NAMING","filePath":file_path,"startLine":line,"endLine":line,"summary":summary,"detail":detail,"suggestion":suggestion,"codeSnippet":snippet})
+file_path = None
+new_line = None
+for raw in data.get("diffContent", "").splitlines():
+    if raw.startswith("diff --git "):
+        parts = raw.split()
+        file_path = parts[3][2:] if len(parts) >= 4 and parts[3].startswith("b/") else None
+        continue
+    if raw.startswith("+++ b/"):
+        file_path = raw[6:]
+        continue
+    m = re.match(r"@@ -\d+(?:,\d)? \+(\d+)(?:,\d+)? @@", raw)
+    if m:
+        new_line = int(m.group(1))
+        continue
+    if new_line is None or not file_path:
+        continue
+    if raw.startswith("+") and not raw.startswith("+++"):
+        line = raw[1:]
+        text = line.strip()
+        if file_path.endswith(".java") and text and not text.startswith(("//", "*", "/*", "@")):
+            pm = re.match(r"^package\s+([A-Za-z0-9_.]+)\s*;", text)
+            if pm and not package.match(pm.group(1)):
+                add(file_path, new_line, "包名不符合小写命名规范", "Java 包名应仅使用小写字母、数字和点号。", "将包名调整为全小写分段。", line)
+            tm = re.search(r"\b(class|interface|enum|@interface)\s+([A-Za-z_$][\w$]*)", text)
+            if tm and not upper.match(tm.group(2)):
+                add(file_path, new_line, "类型名不符合大驼峰命名规范", "类、接口、枚举和注解类型名应使用 UpperCamelCase。", "将类型名重命名为 UpperCamelCase。", line)
+            cm = re.search(r"\b(static\s+final|final\s+static)\b[^=;]*\s+([A-Za-z_$][\w$]*)\s*[=;]", text)
+            if cm and not constant.match(cm.group(2)):
+                add(file_path, new_line, "常量名不符合全大写下划线规范", "static final 常量应使用全大写下划线命名。", "将常量名改为 UPPER_SNAKE_CASE。", line)
+            mm = re.search(r"\b(?:public|protected|private)?\s*(?:static\s+)?[A-Za-z0-9_<>, ?\[\]]+\s+([A-Za-z_$][\w$]*)\s*\(", text)
+            if mm and mm.group(1) not in ("if","for","while","switch","catch") and not lower.match(mm.group(1)):
+                add(file_path, new_line, "方法名不符合小驼峰命名规范", "Java 方法名应使用 lowerCamelCase。", "将方法名重命名为 lowerCamelCase。", line)
+        new_line += 1
+    elif raw.startswith("-") and not raw.startswith("---"):
+        continue
+    else:
+        new_line += 1
+print(json.dumps({"issues": issues}, ensure_ascii=False))',
+       20,
+       1,
+       10
+WHERE NOT EXISTS (
+  SELECT 1 FROM cr_script_rule WHERE script_code = 'DEFAULT_BACKEND_JAVA_NAMING' AND deleted = 0
+);
 
 CREATE TABLE IF NOT EXISTS cr_review_task (
   id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
@@ -131,6 +193,10 @@ CREATE TABLE IF NOT EXISTS cr_review_issue (
   project_id BIGINT NOT NULL COMMENT '项目 ID',
   rule_id BIGINT DEFAULT NULL COMMENT '命中的规则 ID',
   skill_id BIGINT DEFAULT NULL COMMENT '关联 Skill ID',
+  script_id BIGINT DEFAULT NULL COMMENT '关联脚本 ID',
+  rule_name VARCHAR(128) DEFAULT NULL COMMENT '命中规则名称快照',
+  skill_name VARCHAR(128) DEFAULT NULL COMMENT '命中 Skill 名称快照',
+  script_name VARCHAR(128) DEFAULT NULL COMMENT '命中脚本名称快照',
   issue_source VARCHAR(32) NOT NULL COMMENT '来源：AI/SCRIPT',
   severity VARCHAR(32) NOT NULL COMMENT '严重等级',
   issue_type VARCHAR(64) NOT NULL COMMENT '问题类型',
@@ -150,6 +216,7 @@ CREATE TABLE IF NOT EXISTS cr_review_issue (
   KEY idx_task_id (task_id),
   KEY idx_project_id (project_id),
   KEY idx_rule_id (rule_id),
+  KEY idx_script_id (script_id),
   KEY idx_severity (severity),
   KEY idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='检视问题表';
@@ -237,6 +304,23 @@ CREATE TABLE IF NOT EXISTS cr_system_config (
   PRIMARY KEY (id),
   UNIQUE KEY uk_config_key (config_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='系统参数配置表';
+
+CREATE TABLE IF NOT EXISTS cr_model_config (
+  id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+  config_name VARCHAR(128) NOT NULL COMMENT '配置名称',
+  provider_type VARCHAR(64) NOT NULL DEFAULT 'OPENAI_COMPATIBLE' COMMENT '服务类型',
+  base_url VARCHAR(1024) NOT NULL COMMENT 'OpenAI 兼容 Base URL 或 chat completions URL',
+  model_name VARCHAR(128) NOT NULL COMMENT '模型名称',
+  api_key TEXT COMMENT 'API Key',
+  enabled TINYINT NOT NULL DEFAULT 0 COMMENT '是否启用',
+  remark VARCHAR(512) DEFAULT NULL COMMENT '备注',
+  create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  deleted TINYINT NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+  PRIMARY KEY (id),
+  KEY idx_enabled (enabled),
+  KEY idx_provider_type (provider_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='模型服务配置表';
 
 CREATE TABLE IF NOT EXISTS cr_distributed_lock (
   id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',

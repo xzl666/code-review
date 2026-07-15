@@ -271,6 +271,29 @@ body {
   width: 100%;
 }
 
+.table-ellipsis {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cursor-tooltip {
+  position: fixed;
+  z-index: 3000;
+  max-width: min(520px, calc(100vw - 32px));
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #1f2937;
+  color: #ffffff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.22);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+
 .data-table .el-table__header-wrapper th,
 .el-table th.el-table__cell {
   background: #f8fafc !important;
@@ -606,7 +629,7 @@ body {
   word-break: break-word;
 }
 
-.detail-section-title span {
+.detail-section-title > span:not(.el-tag) {
   flex: none;
   color: #64748b;
   font-size: 12px;

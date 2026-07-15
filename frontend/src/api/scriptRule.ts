@@ -4,29 +4,34 @@ export interface ScriptRule {
   id: number
   scriptName: string
   scriptCode: string
-  scriptLanguage: string
+  projectType: string
+  ruleType: string
+  severity: string
+  description?: string
   scriptContent: string
-  parameterTemplate?: string
   timeoutSeconds: number
-  generatedByAi: number
   status: number
+  sortOrder: number
 }
 
 export interface ScriptRuleForm {
   id?: number
   scriptName: string
   scriptCode: string
-  scriptLanguage: string
+  projectType: string
+  ruleType: string
+  severity: string
+  description?: string
   scriptContent: string
-  parameterTemplate?: string
   timeoutSeconds: number
-  generatedByAi?: number
   status?: number
+  sortOrder: number
 }
 
 export interface ScriptRuleQuery {
   scriptName?: string
-  scriptLanguage?: string
+  scriptCode?: string
+  projectType?: string
   status?: number
   pageNo: number
   pageSize: number
@@ -65,6 +70,6 @@ export function disableScriptRule(id: number) {
   return post<void>('/api/script/disable', { id })
 }
 
-export function testRunScript(data: { scriptId?: number; scriptLanguage?: string; scriptContent: string; inputJson?: string; timeoutSeconds?: number }) {
+export function testRunScript(data: { scriptId?: number; scriptContent: string; inputJson?: string; timeoutSeconds?: number }) {
   return post<ScriptTestRunResponse>('/api/script/test-run', data)
 }

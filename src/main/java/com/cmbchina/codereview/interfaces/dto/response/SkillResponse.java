@@ -11,12 +11,6 @@ public class SkillResponse {
 
     private String skillCode;
 
-    private String functionName;
-
-    private String functionDescription;
-
-    private String parametersSchema;
-
     private String version;
 
     private String projectType;
@@ -24,6 +18,8 @@ public class SkillResponse {
     private Integer ruleMatchingEnabled;
 
     private String matchRules;
+
+    private String reviewGuidelines;
 
     private Integer status;
 }

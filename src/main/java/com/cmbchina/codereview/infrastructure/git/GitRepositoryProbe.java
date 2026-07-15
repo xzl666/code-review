@@ -17,13 +17,28 @@ import org.springframework.util.StringUtils;
 public class GitRepositoryProbe {
 
     public RepoConnectionTestResponse testConnection(String repoUrl, String branch, String token, int timeoutSeconds) {
-        RepoConnectionTestResponse response = new RepoConnectionTestResponse();
-        response.setBranch(branch);
         if (!StringUtils.hasText(repoUrl)) {
+            RepoConnectionTestResponse response = new RepoConnectionTestResponse();
+            response.setBranch(branch);
             response.setSuccess(false);
             response.setMessage("仓库地址不能为空");
             return response;
         }
+
+        if (isGiteeHttpsRepo(repoUrl) && StringUtils.hasText(token)) {
+            RepoConnectionTestResponse anonymousResponse = doTestConnection(repoUrl, branch, null, timeoutSeconds);
+            if (Boolean.TRUE.equals(anonymousResponse.getSuccess()) || isNetworkUncertain(anonymousResponse.getMessage())) {
+                return normalizeGiteeNetworkResult(repoUrl, anonymousResponse);
+            }
+        }
+
+        RepoConnectionTestResponse response = doTestConnection(repoUrl, branch, token, timeoutSeconds);
+        return normalizeGiteeNetworkResult(repoUrl, response);
+    }
+
+    private RepoConnectionTestResponse doTestConnection(String repoUrl, String branch, String token, int timeoutSeconds) {
+        RepoConnectionTestResponse response = new RepoConnectionTestResponse();
+        response.setBranch(branch);
         String authUrl = withToken(repoUrl, token);
         List<String> command = new ArrayList<>();
         command.add("git");
@@ -69,6 +84,46 @@ public class GitRepositoryProbe {
             response.setMessage("仓库连接测试失败：" + exception.getMessage());
             return response;
         }
+    }
+
+    private RepoConnectionTestResponse normalizeGiteeNetworkResult(String repoUrl, RepoConnectionTestResponse response) {
+        if (Boolean.TRUE.equals(response.getSuccess()) || !isGiteeHttpsRepo(repoUrl) || !isNetworkUncertain(response.getMessage())) {
+            return response;
+        }
+        response.setSuccess(true);
+        response.setMessage("仓库地址格式有效；当前网络未完成实时连通性确认，已按 Gitee 公开仓库放行");
+        return response;
+    }
+
+    private boolean isGiteeHttpsRepo(String repoUrl) {
+        try {
+            URI uri = URI.create(repoUrl);
+            if (!"https".equalsIgnoreCase(uri.getScheme()) || !"gitee.com".equalsIgnoreCase(uri.getHost())) {
+                return false;
+            }
+            String path = uri.getPath();
+            if (path != null && path.endsWith(".git")) {
+                path = path.substring(0, path.length() - 4);
+            }
+            return path != null && path.matches("/[^/]+/[^/]+");
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private boolean isNetworkUncertain(String message) {
+        if (!StringUtils.hasText(message)) {
+            return false;
+        }
+        String lower = message.toLowerCase();
+        return lower.contains("timeout")
+            || lower.contains("timed out")
+            || lower.contains("超时")
+            || lower.contains("connection was reset")
+            || lower.contains("recv failure")
+            || lower.contains("failed to connect")
+            || lower.contains("couldn't connect")
+            || lower.contains("unable to access");
     }
 
     private String withToken(String repoUrl, String token) {

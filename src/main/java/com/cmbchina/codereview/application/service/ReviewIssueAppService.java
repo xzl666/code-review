@@ -20,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.net.URI;
 import java.net.URLEncoder;
 import java.util.HashSet;
 import java.util.List;
@@ -91,12 +92,16 @@ public class ReviewIssueAppService {
     public String export(ReviewIssuePageRequest request) {
         List<ReviewIssueResponse> records = page(request).getRecords();
         StringBuilder builder = new StringBuilder();
-        builder.append("id,taskId,taskNo,projectId,severity,status,filePath,startLine,endLine,summary\n");
+        builder.append("id,taskId,taskNo,projectId,source,ruleName,skillName,scriptName,severity,status,filePath,startLine,endLine,summary\n");
         for (ReviewIssueResponse issue : records) {
             builder.append(issue.getId()).append(',')
                 .append(issue.getTaskId()).append(',')
                 .append(escape(issue.getTaskNo())).append(',')
                 .append(issue.getProjectId()).append(',')
+                .append(escape(issue.getIssueSource())).append(',')
+                .append(escape(issue.getRuleName())).append(',')
+                .append(escape(issue.getSkillName())).append(',')
+                .append(escape(issue.getScriptName())).append(',')
                 .append(issue.getSeverity()).append(',')
                 .append(issue.getStatus()).append(',')
                 .append(escape(issue.getFilePath())).append(',')
@@ -168,6 +173,10 @@ public class ReviewIssueAppService {
         response.setProjectId(entity.getProjectId());
         response.setRuleId(entity.getRuleId());
         response.setSkillId(entity.getSkillId());
+        response.setScriptId(entity.getScriptId());
+        response.setRuleName(entity.getRuleName());
+        response.setSkillName(entity.getSkillName());
+        response.setScriptName(entity.getScriptName());
         response.setIssueSource(entity.getIssueSource());
         response.setSeverity(entity.getSeverity());
         response.setIssueType(entity.getIssueType());
@@ -229,6 +238,23 @@ public class ReviewIssueAppService {
         String url = repoUrl.trim();
         if (url.endsWith(".git")) {
             url = url.substring(0, url.length() - 4);
+        }
+        if (url.startsWith("git@")) {
+            int atIndex = url.indexOf('@');
+            int colonIndex = url.indexOf(':', atIndex + 1);
+            if (colonIndex > atIndex) {
+                return "https://" + url.substring(atIndex + 1, colonIndex) + "/" + url.substring(colonIndex + 1);
+            }
+        }
+        if (url.startsWith("ssh://")) {
+            try {
+                URI uri = URI.create(url);
+                if (StringUtils.hasText(uri.getHost()) && StringUtils.hasText(uri.getPath())) {
+                    return "https://" + uri.getHost() + uri.getPath();
+                }
+            } catch (IllegalArgumentException ignored) {
+                return url;
+            }
         }
         int schemeIndex = url.indexOf("://");
         if (schemeIndex >= 0) {

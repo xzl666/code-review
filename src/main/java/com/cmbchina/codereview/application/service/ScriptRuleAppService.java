@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.cmbchina.codereview.common.enums.BaseStatus;
+import com.cmbchina.codereview.common.enums.ProjectType;
+import com.cmbchina.codereview.common.enums.Severity;
 import com.cmbchina.codereview.common.exception.BizException;
 import com.cmbchina.codereview.common.exception.ErrorCode;
 import com.cmbchina.codereview.common.response.PageResponse;
@@ -15,7 +17,6 @@ import com.cmbchina.codereview.interfaces.dto.request.ScriptTestRunRequest;
 import com.cmbchina.codereview.interfaces.dto.request.ScriptUpdateRequest;
 import com.cmbchina.codereview.interfaces.dto.response.ScriptResponse;
 import com.cmbchina.codereview.interfaces.dto.response.ScriptTestRunResponse;
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -40,12 +41,14 @@ public class ScriptRuleAppService {
         ScriptRuleEntity entity = new ScriptRuleEntity();
         entity.setScriptName(request.getScriptName());
         entity.setScriptCode(request.getScriptCode());
-        entity.setScriptLanguage(normalizeLanguage(request.getScriptLanguage()));
+        entity.setProjectType(normalizeProjectType(request.getProjectType()));
+        entity.setRuleType(defaultIfBlank(request.getRuleType(), "CUSTOM"));
+        entity.setSeverity(normalizeSeverity(request.getSeverity()));
+        entity.setDescription(request.getDescription());
         entity.setScriptContent(request.getScriptContent());
-        entity.setParameterTemplate(request.getParameterTemplate());
         entity.setTimeoutSeconds(request.getTimeoutSeconds() == null ? 30 : request.getTimeoutSeconds());
-        entity.setGeneratedByAi(request.getGeneratedByAi() == null ? 0 : request.getGeneratedByAi());
         entity.setStatus(BaseStatus.ENABLED.getValue());
+        entity.setSortOrder(request.getSortOrder() == null ? 0 : request.getSortOrder());
         scriptRuleMapper.insert(entity);
         return entity.getId();
     }
@@ -57,12 +60,14 @@ public class ScriptRuleAppService {
         entity.setId(request.getId());
         entity.setScriptName(request.getScriptName());
         entity.setScriptCode(request.getScriptCode());
-        entity.setScriptLanguage(normalizeLanguage(request.getScriptLanguage()));
+        entity.setProjectType(normalizeProjectType(request.getProjectType()));
+        entity.setRuleType(defaultIfBlank(request.getRuleType(), "CUSTOM"));
+        entity.setSeverity(normalizeSeverity(request.getSeverity()));
+        entity.setDescription(request.getDescription());
         entity.setScriptContent(request.getScriptContent());
-        entity.setParameterTemplate(request.getParameterTemplate());
         entity.setTimeoutSeconds(request.getTimeoutSeconds() == null ? 30 : request.getTimeoutSeconds());
-        entity.setGeneratedByAi(request.getGeneratedByAi() == null ? 0 : request.getGeneratedByAi());
         entity.setStatus(request.getStatus() == null ? BaseStatus.ENABLED.getValue() : request.getStatus());
+        entity.setSortOrder(request.getSortOrder() == null ? 0 : request.getSortOrder());
         scriptRuleMapper.updateById(entity);
     }
 
@@ -81,8 +86,10 @@ public class ScriptRuleAppService {
         long pageSize = request.getPageSize() == null ? 10L : request.getPageSize();
         LambdaQueryWrapper<ScriptRuleEntity> wrapper = new LambdaQueryWrapper<ScriptRuleEntity>()
             .like(StringUtils.hasText(request.getScriptName()), ScriptRuleEntity::getScriptName, request.getScriptName())
-            .eq(StringUtils.hasText(request.getScriptLanguage()), ScriptRuleEntity::getScriptLanguage, request.getScriptLanguage())
+            .like(StringUtils.hasText(request.getScriptCode()), ScriptRuleEntity::getScriptCode, request.getScriptCode())
+            .eq(StringUtils.hasText(request.getProjectType()), ScriptRuleEntity::getProjectType, request.getProjectType())
             .eq(request.getStatus() != null, ScriptRuleEntity::getStatus, request.getStatus())
+            .orderByAsc(ScriptRuleEntity::getSortOrder)
             .orderByDesc(ScriptRuleEntity::getCreateTime);
         Page<ScriptRuleEntity> page = scriptRuleMapper.selectPage(new Page<>(pageNo, pageSize), wrapper);
         List<ScriptResponse> records = page.getRecords().stream().map(this::toResponse).collect(Collectors.toList());
@@ -105,11 +112,11 @@ public class ScriptRuleAppService {
         String content;
         if (request.getScriptId() != null) {
             ScriptRuleEntity entity = ensureExists(request.getScriptId());
-            language = entity.getScriptLanguage();
+            language = "PYTHON";
             content = entity.getScriptContent();
             timeoutSeconds = entity.getTimeoutSeconds();
         } else {
-            language = normalizeLanguage(request.getScriptLanguage());
+            language = "PYTHON";
             content = request.getScriptContent();
         }
         ScriptExecutionRequest executionRequest = new ScriptExecutionRequest();
@@ -118,6 +125,7 @@ public class ScriptRuleAppService {
         executionRequest.setInputJson(request.getInputJson());
         executionRequest.setTimeoutSeconds(timeoutSeconds);
         ScriptExecutionResult result = scriptSandboxExecutor.execute(executionRequest);
+        validateIssueJson(result);
         return toTestRunResponse(result);
     }
 
@@ -142,24 +150,56 @@ public class ScriptRuleAppService {
         response.setId(entity.getId());
         response.setScriptName(entity.getScriptName());
         response.setScriptCode(entity.getScriptCode());
-        response.setScriptLanguage(entity.getScriptLanguage());
+        response.setProjectType(entity.getProjectType());
+        response.setRuleType(entity.getRuleType());
+        response.setSeverity(entity.getSeverity());
+        response.setDescription(entity.getDescription());
         response.setScriptContent(entity.getScriptContent());
-        response.setParameterTemplate(entity.getParameterTemplate());
         response.setTimeoutSeconds(entity.getTimeoutSeconds());
-        response.setGeneratedByAi(entity.getGeneratedByAi());
         response.setStatus(entity.getStatus());
+        response.setSortOrder(entity.getSortOrder());
         return response;
     }
 
-    private String normalizeLanguage(String language) {
-        if (!StringUtils.hasText(language)) {
-            throw new BizException(ErrorCode.PARAM_ERROR, "脚本语言不能为空");
+    private String normalizeProjectType(String projectType) {
+        String upper = defaultIfBlank(projectType, ProjectType.ALL.name()).toUpperCase();
+        try {
+            ProjectType.valueOf(upper);
+            return upper;
+        } catch (Exception exception) {
+            throw new BizException(ErrorCode.PARAM_ERROR, "项目类型必须是 ALL/FRONTEND/BACKEND");
         }
-        String upper = language.toUpperCase();
-        if (!Arrays.asList("SHELL", "PYTHON", "NODE").contains(upper)) {
-            throw new BizException(ErrorCode.PARAM_ERROR, "脚本语言仅支持 SHELL/PYTHON/NODE");
+    }
+
+    private String normalizeSeverity(String severity) {
+        String upper = defaultIfBlank(severity, Severity.MAJOR.name()).toUpperCase();
+        try {
+            Severity.valueOf(upper);
+            return upper;
+        } catch (Exception exception) {
+            throw new BizException(ErrorCode.PARAM_ERROR, "严重等级不合法");
         }
-        return upper;
+    }
+
+    private String defaultIfBlank(String value, String defaultValue) {
+        return StringUtils.hasText(value) ? value : defaultValue;
+    }
+
+    private void validateIssueJson(ScriptExecutionResult result) {
+        if (!Boolean.TRUE.equals(result.getSuccess())) {
+            return;
+        }
+        try {
+            com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(result.getStdout());
+            com.fasterxml.jackson.databind.JsonNode issues = root.isArray() ? root : root.get("issues");
+            if (issues == null || !issues.isArray()) {
+                result.setSuccess(false);
+                result.setStderr("脚本输出必须是 JSON，且包含 issues 数组");
+            }
+        } catch (Exception exception) {
+            result.setSuccess(false);
+            result.setStderr("脚本输出不是合法 JSON：" + exception.getMessage());
+        }
     }
 
     private ScriptTestRunResponse toTestRunResponse(ScriptExecutionResult result) {

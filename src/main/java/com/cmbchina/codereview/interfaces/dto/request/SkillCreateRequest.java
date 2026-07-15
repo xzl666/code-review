@@ -12,14 +12,6 @@ public class SkillCreateRequest {
     @NotBlank(message = "不能为空")
     private String skillCode;
 
-    @NotBlank(message = "不能为空")
-    private String functionName;
-
-    private String functionDescription;
-
-    @NotBlank(message = "不能为空")
-    private String parametersSchema;
-
     private String version = "1.0.0";
 
     private String projectType = "ALL";
@@ -27,4 +19,7 @@ public class SkillCreateRequest {
     private Integer ruleMatchingEnabled = 0;
 
     private String matchRules;
+
+    @NotBlank(message = "不能为空")
+    private String reviewGuidelines;
 }

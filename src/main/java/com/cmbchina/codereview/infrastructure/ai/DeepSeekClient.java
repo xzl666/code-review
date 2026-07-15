@@ -10,24 +10,54 @@ import com.cmbchina.codereview.infrastructure.persistence.entity.ReviewRuleEntit
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
-import org.springframework.http.converter.StringHttpMessageConverter;
-import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
-import org.springframework.web.client.RestTemplate;
 
+@Slf4j
 @Component
 public class DeepSeekClient {
+
+    private static final String REVIEW_FUNCTION_NAME = "submit_review_issues";
+
+    private static final String REVIEW_FUNCTION_DESCRIPTION =
+        "Submit structured code review issues found by the AI skill. Return an empty issues array when no actionable issue exists.";
+
+    private static final String REVIEW_PARAMETERS_SCHEMA = "{\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"properties\": {\n"
+        + "    \"issues\": {\n"
+        + "      \"type\": \"array\",\n"
+        + "      \"items\": {\n"
+        + "        \"type\": \"object\",\n"
+        + "        \"properties\": {\n"
+        + "          \"issueType\": { \"type\": \"string\" },\n"
+        + "          \"severity\": { \"type\": \"string\", \"enum\": [\"BLOCKER\", \"CRITICAL\", \"MAJOR\", \"MINOR\", \"INFO\"] },\n"
+        + "          \"filePath\": { \"type\": \"string\" },\n"
+        + "          \"startLine\": { \"type\": \"integer\" },\n"
+        + "          \"endLine\": { \"type\": \"integer\" },\n"
+        + "          \"summary\": { \"type\": \"string\" },\n"
+        + "          \"detail\": { \"type\": \"string\" },\n"
+        + "          \"suggestion\": { \"type\": \"string\" },\n"
+        + "          \"codeSnippet\": { \"type\": \"string\" }\n"
+        + "        },\n"
+        + "        \"required\": [\"issueType\", \"severity\", \"filePath\", \"summary\", \"detail\", \"suggestion\"]\n"
+        + "      }\n"
+        + "    }\n"
+        + "  },\n"
+        + "  \"required\": [\"issues\"]\n"
+        + "}";
 
     private final DeepSeekProperties properties;
 
@@ -52,19 +82,11 @@ public class DeepSeekClient {
         }
         try {
             String requestBody = objectMapper.writeValueAsString(requestBody(project, rule, skill, chunk, branch, reviewDays, model));
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(apiKey);
-            ResponseEntity<String> response = restTemplate().exchange(
-                url,
-                HttpMethod.POST,
-                new HttpEntity<>(requestBody, headers),
-                String.class
-            );
-            if (!response.getStatusCode().is2xxSuccessful()) {
-                throw new BizException(ErrorCode.BIZ_ERROR, "DeepSeek request failed: HTTP " + response.getStatusCodeValue() + "; " + response.getBody());
+            HttpResult response = postJson(url, apiKey, requestBody);
+            if (response.statusCode < 200 || response.statusCode >= 300) {
+                throw new BizException(ErrorCode.BIZ_ERROR, "DeepSeek request failed: HTTP " + response.statusCode + "; " + response.body);
             }
-            return extractJsonPayload(extractArguments(response.getBody()));
+            return extractJsonPayload(extractArguments(response.body));
         } catch (BizException exception) {
             throw exception;
         } catch (Exception exception) {
@@ -90,19 +112,11 @@ public class DeepSeekClient {
             String requestBody = objectMapper.writeValueAsString(
                 repairRequestBody(invalidArguments, parseError, project, rule, skill, chunk, branch, reviewDays, model)
             );
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(apiKey);
-            ResponseEntity<String> response = restTemplate().exchange(
-                url,
-                HttpMethod.POST,
-                new HttpEntity<>(requestBody, headers),
-                String.class
-            );
-            if (!response.getStatusCode().is2xxSuccessful()) {
-                throw new BizException(ErrorCode.BIZ_ERROR, "DeepSeek repair request failed: HTTP " + response.getStatusCodeValue() + "; " + response.getBody());
+            HttpResult response = postJson(url, apiKey, requestBody);
+            if (response.statusCode < 200 || response.statusCode >= 300) {
+                throw new BizException(ErrorCode.BIZ_ERROR, "DeepSeek repair request failed: HTTP " + response.statusCode + "; " + response.body);
             }
-            return extractJsonPayload(extractArguments(response.getBody()));
+            return extractJsonPayload(extractArguments(response.body));
         } catch (BizException exception) {
             throw exception;
         } catch (Exception exception) {
@@ -121,13 +135,8 @@ public class DeepSeekClient {
         body.put("model", model);
         body.put("messages", messages(project, rule, skill, chunk, branch, reviewDays));
         body.put("tools", tools(skill));
-        Map<String, Object> function = new LinkedHashMap<>();
-        function.put("name", skill.getFunctionName());
-        Map<String, Object> toolChoice = new LinkedHashMap<>();
-        toolChoice.put("type", "function");
-        toolChoice.put("function", function);
-        body.put("tool_choice", toolChoice);
         body.put("temperature", 0);
+        body.put("max_tokens", maxTokens());
         return body;
     }
 
@@ -177,11 +186,12 @@ public class DeepSeekClient {
             + "ReviewDays: " + value(reviewDays) + "\n"
             + "DefaultFilePath: " + value(chunk.getFilePath()) + "\n"
             + "DefaultSeverity: " + value(rule.getSeverity()) + "\n"
-            + "FunctionName: " + value(skill.getFunctionName()) + "\n"
+            + "FunctionName: " + REVIEW_FUNCTION_NAME + "\n"
             + "SkillProjectType: " + value(skill.getProjectType()) + "\n"
             + "SkillRuleMatchingEnabled: " + value(skill.getRuleMatchingEnabled()) + "\n"
             + "SkillMatchRules:\n" + value(skill.getMatchRules()) + "\n"
-            + "FunctionSchema:\n" + objectMapper.writeValueAsString(strictParametersSchema(objectMapper.readTree(skill.getParametersSchema()))) + "\n"
+            + "SkillReviewGuidelines:\n" + value(skill.getReviewGuidelines()) + "\n"
+            + "FunctionSchema:\n" + objectMapper.writeValueAsString(strictParametersSchema(objectMapper.readTree(REVIEW_PARAMETERS_SCHEMA))) + "\n"
             + "ChangedNewLines:\n" + changedNewLines(chunk) + "\n"
             + "MalformedArguments:\n" + value(invalidArguments) + "\n"
             + "OriginalDiff:\n" + value(chunk.getContent());
@@ -190,35 +200,41 @@ public class DeepSeekClient {
     }
 
     private String renderPrompt(String template, Project project, AiSkillEntity skill, DiffChunk chunk, String branch, Integer reviewDays) {
+        boolean templateContainsDiff = StringUtils.hasText(template) && template.contains("${diffContent}");
         String prompt = StringUtils.hasText(template) ? template : "Review the following git diff and report code issues.";
         prompt = prompt.replace("${projectName}", value(project.getProjectName()));
         prompt = prompt.replace("${projectType}", value(project.getProjectType()));
         prompt = prompt.replace("${branch}", value(branch));
         prompt = prompt.replace("${reviewDays}", String.valueOf(reviewDays));
         prompt = prompt.replace("${diffContent}", value(chunk.getContent()));
-        return prompt
-            + "\n\nUse Chinese for summary, detail, suggestion and other descriptive fields."
-            + "\nReturn only through the provided function. Do not output Markdown, code fences, explanations or plain text."
-            + "\nAll code, annotations such as @Valid, quotes, backslashes and newlines must be valid JSON string values with correct escaping."
-            + "\nSkillProjectType: " + value(skill.getProjectType()) + ". SkillRuleMatchingEnabled: " + value(skill.getRuleMatchingEnabled()) + "."
-            + "\nWhen SkillMatchRules are provided, treat them as review scope hints and focus on issues relevant to those rules."
-            + "\nIf a line range can be located, fill startLine and endLine. If it is a single line issue, use the same value for both fields."
-            + "\nOnly report issues on changed new-file lines listed in ChangedNewLines. Do not report issues that appear only in unchanged context lines."
-            + "\nstartLine and endLine must be actual new-file line numbers from ChangedNewLines. If no changed line is relevant, return no issue."
-            + "\nIf there are no issues, return {\"issues\":[]} through the function."
-            + "\n\nFile: " + chunk.getFilePath()
-            + "\nChunkIndex: " + chunk.getChunkIndex()
-            + "\nOldStartLine: " + value(chunk.getOldStartLine())
-            + "\nNewStartLine: " + value(chunk.getNewStartLine())
-            + "\nSkillMatchRules:\n" + value(skill.getMatchRules())
-            + "\nChangedNewLines:\n" + changedNewLines(chunk)
-            + "\nDiff:\n" + chunk.getContent();
+        StringBuilder builder = new StringBuilder(prompt)
+            .append("\n\nUse Chinese for summary, detail, suggestion and other descriptive fields.")
+            .append("\nReturn only through the provided function. Do not output Markdown, code fences, explanations or plain text.")
+            .append("\nAll code, annotations such as @Valid, quotes, backslashes and newlines must be valid JSON string values with correct escaping.")
+            .append("\nSkillProjectType: ").append(value(skill.getProjectType())).append(". SkillRuleMatchingEnabled: ").append(value(skill.getRuleMatchingEnabled())).append(".")
+            .append("\nWhen SkillMatchRules are provided, treat them as review scope hints and focus on issues relevant to those rules.")
+            .append("\nIf a line range can be located, fill startLine and endLine. If it is a single line issue, use the same value for both fields.")
+            .append("\nOnly report issues on changed new-file lines listed in ChangedNewLines. Do not report issues that appear only in unchanged context lines.")
+            .append("\nstartLine and endLine must be actual new-file line numbers from ChangedNewLines. If no changed line is relevant, return no issue.")
+            .append("\nIf there are no issues, return {\"issues\":[]} through the function.")
+            .append("\n\nFile: ").append(chunk.getFilePath())
+            .append("\nChunkIndex: ").append(chunk.getChunkIndex())
+            .append("\nOldStartLine: ").append(value(chunk.getOldStartLine()))
+            .append("\nNewStartLine: ").append(value(chunk.getNewStartLine()))
+            .append("\nSkillMatchRules:\n").append(value(skill.getMatchRules()))
+            .append("\nSkillReviewGuidelines:\n").append(value(skill.getReviewGuidelines()))
+            .append("\nChangedNewLines:\n").append(changedNewLines(chunk));
+        if (!templateContainsDiff) {
+            builder.append("\nDiff:\n").append(chunk.getContent());
+        }
+        return builder.toString();
     }
 
     private String renderPrompt(String template, Project project, DiffChunk chunk, String branch, Integer reviewDays) {
         AiSkillEntity skill = new AiSkillEntity();
         skill.setProjectType("ALL");
         skill.setRuleMatchingEnabled(0);
+        skill.setReviewGuidelines("");
         return renderPrompt(template, project, skill, chunk, branch, reviewDays);
     }
 
@@ -265,9 +281,9 @@ public class DeepSeekClient {
 
     private List<Map<String, Object>> tools(AiSkillEntity skill) throws Exception {
         Map<String, Object> function = new LinkedHashMap<>();
-        function.put("name", skill.getFunctionName());
-        function.put("description", skill.getFunctionDescription());
-        function.put("parameters", strictParametersSchema(objectMapper.readTree(skill.getParametersSchema())));
+        function.put("name", REVIEW_FUNCTION_NAME);
+        function.put("description", REVIEW_FUNCTION_DESCRIPTION);
+        function.put("parameters", strictParametersSchema(objectMapper.readTree(REVIEW_PARAMETERS_SCHEMA)));
         Map<String, Object> tool = new LinkedHashMap<>();
         tool.put("type", "function");
         tool.put("function", function);
@@ -319,6 +335,10 @@ public class DeepSeekClient {
             if (!arguments.isMissingNode() && !arguments.isNull()) {
                 return arguments.isTextual() ? arguments.asText() : arguments.toString();
             }
+        }
+        JsonNode functionCallArguments = message.path("function_call").path("arguments");
+        if (!functionCallArguments.isMissingNode() && !functionCallArguments.isNull()) {
+            return functionCallArguments.isTextual() ? functionCallArguments.asText() : functionCallArguments.toString();
         }
         JsonNode content = message.path("content");
         if (!content.isMissingNode() && !content.isNull()) {
@@ -384,13 +404,88 @@ public class DeepSeekClient {
         return trimmed + "/v1/chat/completions";
     }
 
-    private RestTemplate restTemplate() {
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        int timeoutMillis = properties.getTimeoutSeconds() * 1000;
-        factory.setConnectTimeout(timeoutMillis);
-        factory.setReadTimeout(timeoutMillis);
-        RestTemplate restTemplate = new RestTemplate(factory);
-        restTemplate.getMessageConverters().add(0, new StringHttpMessageConverter(StandardCharsets.UTF_8));
-        return restTemplate;
+    private HttpResult postJson(String url, String apiKey, String requestBody) throws Exception {
+        Duration timeout = Duration.ofSeconds(timeoutSeconds());
+        HttpClient client = HttpClient.newBuilder()
+            .connectTimeout(timeout)
+            .build();
+        HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+            .timeout(timeout)
+            .header("Content-Type", "application/json; charset=UTF-8")
+            .header("Authorization", "Bearer " + apiKey)
+            .POST(HttpRequest.BodyPublishers.ofString(requestBody, StandardCharsets.UTF_8))
+            .build();
+        try {
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            logAiDebug(url, requestBody, response.statusCode(), response.body(), null);
+            return new HttpResult(response.statusCode(), response.body());
+        } catch (Exception exception) {
+            logAiDebug(url, requestBody, null, null, exception);
+            throw exception;
+        }
+    }
+
+    private void logAiDebug(String url, String requestBody, Integer statusCode, String responseBody, Exception exception) {
+        if (!Boolean.TRUE.equals(properties.getDebugLogEnabled())) {
+            return;
+        }
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("requestAddress", url);
+            payload.put("prompt", promptFromRequestBody(requestBody));
+            payload.put("requestBody", objectMapper.readTree(requestBody));
+            payload.put("responseStatus", statusCode);
+            payload.put("responseContent", parseJsonOrText(responseBody));
+            if (exception != null) {
+                payload.put("error", exception.getClass().getSimpleName() + ": " + exception.getMessage());
+            }
+            log.info("AI request debug log: {}", objectMapper.writeValueAsString(payload));
+        } catch (Exception logException) {
+            log.warn("AI request debug log failed: {}", logException.getMessage());
+        }
+    }
+
+    private List<String> promptFromRequestBody(String requestBody) throws Exception {
+        List<String> prompts = new ArrayList<>();
+        JsonNode messages = objectMapper.readTree(requestBody).path("messages");
+        if (messages.isArray()) {
+            for (JsonNode message : messages) {
+                String role = message.path("role").asText("");
+                String content = message.path("content").asText("");
+                prompts.add(role + ": " + content);
+            }
+        }
+        return prompts;
+    }
+
+    private Object parseJsonOrText(String value) {
+        if (!StringUtils.hasText(value)) {
+            return value;
+        }
+        try {
+            return objectMapper.readTree(value);
+        } catch (Exception ignored) {
+            return value;
+        }
+    }
+
+    private int timeoutSeconds() {
+        Integer timeoutSeconds = properties.getTimeoutSeconds();
+        return timeoutSeconds == null || timeoutSeconds < 1 ? 60 : timeoutSeconds;
+    }
+
+    private int maxTokens() {
+        Integer maxTokens = properties.getMaxTokens();
+        return maxTokens == null || maxTokens < 1 ? 2048 : maxTokens;
+    }
+
+    private static class HttpResult {
+        private final int statusCode;
+        private final String body;
+
+        private HttpResult(int statusCode, String body) {
+            this.statusCode = statusCode;
+            this.body = body;
+        }
     }
 }

@@ -24,8 +24,8 @@ class ScriptSandboxExecutorTest {
     @Test
     void rejectsOversizedInput() {
         ScriptExecutionRequest request = new ScriptExecutionRequest();
-        request.setLanguage("NODE");
-        request.setContent("console.log('{}')");
+        request.setLanguage("PYTHON");
+        request.setContent("print('{}')");
         request.setInputJson("x".repeat(500001));
 
         ScriptExecutionResult result = executor.execute(request);
@@ -33,5 +33,31 @@ class ScriptSandboxExecutorTest {
         assertThat(result.getSuccess()).isFalse();
         assertThat(result.getSecurityBlocked()).isTrue();
         assertThat(result.getStderr()).contains("脚本输入超过安全上限");
+    }
+
+    @Test
+    void rejectsNonPythonLanguage() {
+        ScriptExecutionRequest request = new ScriptExecutionRequest();
+        request.setLanguage("NODE");
+        request.setContent("console.log('{\"issues\":[]}')");
+
+        ScriptExecutionResult result = executor.execute(request);
+
+        assertThat(result.getSuccess()).isFalse();
+        assertThat(result.getSecurityBlocked()).isTrue();
+        assertThat(result.getStderr()).contains("仅支持 PYTHON");
+    }
+
+    @Test
+    void runsPythonScriptWithJsonStdin() {
+        ScriptExecutionRequest request = new ScriptExecutionRequest();
+        request.setLanguage("PYTHON");
+        request.setContent("import json, sys\nvalue=json.load(sys.stdin)\nprint(json.dumps({'issues': [], 'branch': value['branch']}))");
+        request.setInputJson("{\"branch\":\"master\"}");
+
+        ScriptExecutionResult result = executor.execute(request);
+
+        assertThat(result.getSuccess()).isTrue();
+        assertThat(result.getStdout()).contains("\"branch\": \"master\"");
     }
 }

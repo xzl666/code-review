@@ -109,8 +109,8 @@ public class AiDraftGenerationService {
     String scriptSystemPrompt() {
         return "你是代码检视平台的规则工程师，负责生成可直接保存到平台的脚本检视规则草稿。"
             + "必须只返回一个 JSON 对象，不要 Markdown，不要解释。"
-            + "脚本语言仅允许 NODE，脚本必须使用 fs.readFileSync(0, 'utf8') 从 stdin 读取 JSON 输入，不能使用 /dev/stdin，不能访问网络、不能启动子进程、不能读取本地仓库文件。"
-            + "平台输入 JSON 包含 projectName、projectType、branch、reviewDays、diffContent、filePaths。"
+            + "脚本语言仅允许 PYTHON，脚本必须使用 json.load(sys.stdin) 从 stdin 读取 JSON 输入，不能访问网络、不能启动子进程、不能读取本地仓库文件。"
+            + "平台输入 JSON 包含 project、branch、reviewDays、commitCount、diffFileCount、diffContent、filePaths、files。"
             + "脚本输出必须是 JSON 字符串，格式为 {\"issues\": []}。"
             + "issues 中每个问题字段必须包含 issueType、severity、filePath、startLine、endLine、summary、detail、suggestion、codeSnippet。"
             + "summary、detail、suggestion 必须使用中文描述，startLine 和 endLine 无法定位时可省略或置为 null。";
@@ -131,10 +131,10 @@ public class AiDraftGenerationService {
             + "项目类型：" + value(request.getProjectType(), "BACKEND") + "\n"
             + "问题类型：" + value(request.getRuleType(), "CUSTOM") + "\n"
             + "严重度：" + value(request.getSeverity(), "MAJOR") + "\n"
-            + "脚本语言：" + value(request.getScriptLanguage(), "NODE") + "\n"
-            + "返回 JSON 字段必须完整包含：scriptName、scriptCode、scriptLanguage、scriptContent、parameterTemplate、timeoutSeconds、"
+            + "脚本语言：PYTHON\n"
+            + "返回 JSON 字段必须完整包含：scriptName、scriptCode、scriptLanguage、scriptContent、timeoutSeconds、"
             + "ruleName、ruleCode、ruleType、severity、projectType、promptTemplate。"
-            + "scriptCode 和 ruleCode 使用大写下划线，timeoutSeconds 建议 10 到 30。";
+            + "scriptLanguage 固定为 PYTHON，scriptCode 和 ruleCode 使用大写下划线，timeoutSeconds 建议 10 到 30。";
     }
 
     private String skillUserPrompt(AiGenerateSkillRequest request) {
@@ -220,28 +220,16 @@ public class AiDraftGenerationService {
     }
 
     private void fillScriptDefaults(AiGeneratedScriptResponse response, AiGenerateScriptRequest request) {
-        response.setScriptLanguage(value(response.getScriptLanguage(), "NODE"));
+        response.setScriptLanguage("PYTHON");
         response.setTimeoutSeconds(response.getTimeoutSeconds() == null ? 20 : response.getTimeoutSeconds());
         response.setProjectType(value(response.getProjectType(), value(request.getProjectType(), "BACKEND")));
         response.setRuleType(value(response.getRuleType(), value(request.getRuleType(), "CUSTOM")));
         response.setSeverity(value(response.getSeverity(), value(request.getSeverity(), "MAJOR")));
-        response.setParameterTemplate(value(response.getParameterTemplate(), "stdin JSON：projectName、projectType、branch、reviewDays、diffContent、filePaths"));
+        response.setParameterTemplate(value(response.getParameterTemplate(), "stdin JSON：project、branch、reviewDays、diffContent、filePaths、files"));
     }
 
     private void normalizeScriptContent(AiGeneratedScriptResponse response) {
-        String scriptContent = response.getScriptContent();
-        if (!StringUtils.hasText(scriptContent)) {
-            return;
-        }
-        scriptContent = scriptContent
-            .replace("fs.readFileSync('/dev/stdin', 'utf8')", "fs.readFileSync(0, 'utf8')")
-            .replace("fs.readFileSync(\"/dev/stdin\", \"utf8\")", "fs.readFileSync(0, 'utf8')")
-            .replace("fs.readFileSync('/dev/stdin')", "fs.readFileSync(0, 'utf8')")
-            .replace("fs.readFileSync(\"/dev/stdin\")", "fs.readFileSync(0, 'utf8')");
-        if (scriptContent.contains("fs.readFileSync") && !scriptContent.contains("require('fs')") && !scriptContent.contains("require(\"fs\")")) {
-            scriptContent = "const fs = require('fs');\n" + scriptContent;
-        }
-        response.setScriptContent(scriptContent);
+        response.setScriptContent(response.getScriptContent());
     }
 
     private void fillSkillDefaults(AiGeneratedSkillResponse response, AiGenerateSkillRequest request) {
@@ -266,8 +254,8 @@ public class AiDraftGenerationService {
         require(response.getScriptContent(), "scriptContent");
         require(response.getRuleName(), "ruleName");
         require(response.getRuleCode(), "ruleCode");
-        if (!"NODE".equalsIgnoreCase(response.getScriptLanguage())) {
-            throw new BizException(ErrorCode.BIZ_ERROR, "当前仅支持生成 NODE 脚本规则");
+        if (!"PYTHON".equalsIgnoreCase(response.getScriptLanguage())) {
+            throw new BizException(ErrorCode.BIZ_ERROR, "当前仅支持生成 PYTHON 脚本规则");
         }
     }
 

@@ -26,8 +26,31 @@ public class ReviewIssuePayloadParser {
                                          Project project,
                                          ReviewRuleEntity rule,
                                          Long skillId,
+                                         String skillName,
+                                         Long scriptId,
+                                         String scriptName,
                                          IssueSource issueSource,
                                          String defaultFilePath) throws Exception {
+        String defaultSeverity = rule == null ? "MAJOR" : rule.getSeverity();
+        String defaultIssueType = rule == null ? "CUSTOM" : rule.getRuleType();
+        String defaultSummary = rule == null ? defaultIssueType : rule.getRuleName();
+        return parse(payload, taskId, project, rule, skillId, skillName, scriptId, scriptName,
+            issueSource, defaultFilePath, defaultSeverity, defaultIssueType, defaultSummary);
+    }
+
+    public List<ReviewIssueEntity> parse(String payload,
+                                         Long taskId,
+                                         Project project,
+                                         ReviewRuleEntity rule,
+                                         Long skillId,
+                                         String skillName,
+                                         Long scriptId,
+                                         String scriptName,
+                                         IssueSource issueSource,
+                                         String defaultFilePath,
+                                         String defaultSeverity,
+                                         String defaultIssueType,
+                                         String defaultSummary) throws Exception {
         if (!StringUtils.hasText(payload)) {
             return new ArrayList<>();
         }
@@ -38,19 +61,25 @@ public class ReviewIssuePayloadParser {
         }
         List<ReviewIssueEntity> entities = new ArrayList<>();
         for (JsonNode issue : issues) {
+            Long ruleId = rule == null ? null : rule.getId();
+            String ruleName = rule == null ? null : rule.getRuleName();
             ReviewIssueEntity entity = new ReviewIssueEntity();
             entity.setTaskId(taskId);
             entity.setProjectId(project.getId());
-            entity.setRuleId(rule.getId());
+            entity.setRuleId(ruleId);
             entity.setSkillId(skillId);
+            entity.setScriptId(scriptId);
+            entity.setRuleName(ruleName);
+            entity.setSkillName(skillName);
+            entity.setScriptName(scriptName);
             entity.setIssueSource(issueSource.name());
-            entity.setSeverity(normalizeSeverity(text(issue, "severity", rule.getSeverity()), rule.getSeverity()));
-            entity.setIssueType(text(issue, "issueType", rule.getRuleType()));
+            entity.setSeverity(normalizeSeverity(text(issue, "severity", defaultSeverity), defaultSeverity));
+            entity.setIssueType(text(issue, "issueType", defaultIssueType));
             entity.setFilePath(firstText(issue, defaultFilePath, "filePath", "filename", "file"));
             Integer startLine = normalizeLine(firstInteger(issue, null, "startLine", "line", "newLine"));
             entity.setStartLine(startLine);
             entity.setEndLine(normalizeLine(firstInteger(issue, startLine, "endLine", "lineEnd", "newEndLine")));
-            entity.setSummary(firstText(issue, rule.getRuleName(), "summary", "title", "message", "description"));
+            entity.setSummary(firstText(issue, defaultSummary, "summary", "title", "message", "description"));
             entity.setDetail(firstText(issue, "", "detail", "description", "message"));
             entity.setSuggestion(firstText(issue, "", "suggestion", "suggestedFix", "fix", "recommendation"));
             entity.setCodeSnippet(firstText(issue, "", "codeSnippet", "snippet"));

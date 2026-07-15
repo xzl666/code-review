@@ -1,9 +1,9 @@
-﻿<template>
+<template>
   <div class="page-stack">
     <section class="toolbar">
       <div class="toolbar-title">
         <strong>AI Skill</strong>
-        <span>维护 Function Calling 函数定义与结构化输出 Schema</span>
+        <span>维护代码检视关注点，约束 AI 按统一 JSON 输出问题</span>
       </div>
       <el-input v-model="query.skillName" clearable placeholder="Skill 名称" class="toolbar-input" @keyup.enter="loadSkills">
         <template #prefix><Search :size="16" /></template>
@@ -25,34 +25,39 @@
       <div class="panel-header">
         <div>
           <h2>Skill 列表</h2>
-          <p>AI 规则通过 Skill 约束模型输出结构</p>
+          <p>根据关注点和代码片段，让大模型返回统一 issues JSON</p>
         </div>
         <el-tag effect="plain">共 {{ total }} 条</el-tag>
       </div>
       <el-table v-loading="loading" :data="skills" stripe class="data-table">
-        <el-table-column prop="skillName" label="名称" min-width="150" />
-        <el-table-column prop="skillCode" label="编码" min-width="150" show-overflow-tooltip />
+        <el-table-column prop="skillName" label="名称" min-width="170" />
+        <el-table-column prop="skillCode" label="编码" min-width="180">
+          <template #default="{ row }">
+            <span class="table-ellipsis">{{ row.skillCode }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="projectType" label="项目类型" width="110">
           <template #default="{ row }">{{ projectTypeLabel(row.projectType) }}</template>
         </el-table-column>
         <el-table-column prop="ruleMatchingEnabled" label="规则匹配" width="100">
           <template #default="{ row }">
-            <el-tag :type="row.ruleMatchingEnabled === 1 ? 'success' : 'info'" effect="plain">
-              {{ row.ruleMatchingEnabled === 1 ? '开启' : '关闭' }}
+            <el-tag :type="row.ruleMatchingEnabled === 1 ? 'success' : 'info'">
+              {{ row.ruleMatchingEnabled === 1 ? '启用' : '停用' }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="functionName" label="函数名" min-width="170" show-overflow-tooltip />
-        <el-table-column prop="version" label="版本" width="100" />
-        <el-table-column prop="parametersSchema" label="Schema" min-width="260" show-overflow-tooltip>
-          <template #default="{ row }">{{ schemaSummary(row.parametersSchema) }}</template>
+        <el-table-column prop="reviewGuidelines" label="检视关注点" min-width="320">
+          <template #default="{ row }">
+            <span class="table-ellipsis">{{ guidelinesSummary(row.reviewGuidelines) }}</span>
+          </template>
         </el-table-column>
+        <el-table-column prop="version" label="版本" width="100" />
         <el-table-column prop="status" label="状态" width="90">
           <template #default="{ row }">
             <el-tag :type="row.status === 1 ? 'success' : 'info'">{{ row.status === 1 ? '启用' : '停用' }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="260" fixed="right">
+        <el-table-column label="操作" width="240" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" :icon="Edit" @click="openEdit(row)">编辑</el-button>
             <el-button v-if="row.status === 1" link type="warning" :icon="Pause" @click="setStatus(row, false)">停用</el-button>
@@ -74,16 +79,13 @@
       </div>
     </section>
 
-    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑 Skill' : '新增 Skill'" width="820px">
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="116px">
+    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑 Skill' : '新增 Skill'" width="860px">
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="120px">
         <el-form-item label="Skill 名称" prop="skillName">
-          <el-input v-model="form.skillName" />
+          <el-input v-model="form.skillName" placeholder="例如：后端 Java Web 默认检视 Skill" />
         </el-form-item>
         <el-form-item label="Skill 编码" prop="skillCode">
-          <el-input v-model="form.skillCode" />
-        </el-form-item>
-        <el-form-item label="函数名" prop="functionName">
-          <el-input v-model="form.functionName" />
+          <el-input v-model="form.skillCode" placeholder="例如：DEFAULT_BACKEND_JAVA_WEB_REVIEW" />
         </el-form-item>
         <el-form-item label="适用项目" prop="projectType">
           <el-segmented v-model="form.projectType" :options="projectTypeOptions" />
@@ -91,42 +93,37 @@
         <el-form-item label="版本" prop="version">
           <el-input v-model="form.version" />
         </el-form-item>
-        <el-form-item label="匹配规则">
+        <el-form-item label="检视关注点" prop="reviewGuidelines">
+          <el-input
+            v-model="form.reviewGuidelines"
+            type="textarea"
+            :rows="12"
+            spellcheck="false"
+            placeholder="每行一条具体规则，例如：
+接口必须校验鉴权和越权访问
+数据库查询必须分页，避免 N+1 和全表加载
+事务方法不能吞掉异常导致不回滚
+日志不能输出 token、密码、身份证、手机号等敏感信息
+外部输入拼接 SQL、路径、命令、URL 前必须校验或参数化"
+          />
+        </el-form-item>
+        <el-form-item label="代码匹配范围">
           <el-switch
             v-model="form.ruleMatchingEnabled"
             :active-value="1"
             :inactive-value="0"
-            active-text="开启"
-            inactive-text="关闭"
+            active-text="启用"
+            inactive-text="停用"
           />
         </el-form-item>
-        <el-form-item v-if="form.ruleMatchingEnabled === 1" label="规则内容">
+        <el-form-item v-if="form.ruleMatchingEnabled === 1" label="匹配规则">
           <el-input
             v-model="form.matchRules"
             type="textarea"
             :rows="7"
             spellcheck="false"
-            placeholder="每行一条：ext:java 或 ext:js,jsx,ts,tsx；path:**/src/**；contains:@Transactional；regex:use[A-Z].*"
+            placeholder="每行一条：ext:java；path:**/src/main/java/**；contains:@Transactional；regex:.*Controller"
           />
-        </el-form-item>
-        <el-form-item label="函数描述">
-          <el-input v-model="form.functionDescription" type="textarea" :rows="3" />
-        </el-form-item>
-        <el-form-item label="AI 生成需求">
-          <el-input
-            v-model="aiRequirement"
-            type="textarea"
-            :rows="3"
-            placeholder="描述希望 Skill 约束的检视输出，例如：面向 Java Web 安全问题，返回文件、行号、中文摘要和修复建议"
-          />
-        </el-form-item>
-        <el-form-item label="参数 Schema" prop="parametersSchema">
-          <el-input v-model="form.parametersSchema" type="textarea" :rows="12" spellcheck="false" />
-        </el-form-item>
-        <el-form-item>
-          <el-button :loading="generating" @click="generateDraft">AI 生成 Skill</el-button>
-          <el-button :icon="CheckCircle2" :loading="validating" @click="validateSchema">校验 Schema</el-button>
-          <el-tag v-if="schemaResult" :type="schemaResult.valid ? 'success' : 'danger'">{{ schemaResult.message }}</el-tag>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -142,56 +139,25 @@ import { onMounted, reactive, ref } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus/es/components/message/index.mjs'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index.mjs'
-import { CheckCircle2, Edit, Pause, Play, Plus, Search, Trash2 } from 'lucide-vue-next'
+import { Edit, Pause, Play, Plus, Search, Trash2 } from 'lucide-vue-next'
 import {
   createSkill,
   deleteSkill,
   disableSkill,
   enableSkill,
-  generateSkillDraft,
   pageSkills,
   updateSkill,
-  validateSkillSchema,
   type Skill,
   type SkillForm
 } from '@/api/skill'
 
-const defaultSchema = JSON.stringify(
-  {
-    type: 'object',
-    properties: {
-      issues: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: {
-            severity: { type: 'string' },
-            filePath: { type: 'string' },
-            startLine: { type: 'integer' },
-            summary: { type: 'string' },
-            suggestion: { type: 'string' }
-          },
-          required: ['severity', 'filePath', 'summary']
-        }
-      }
-    },
-    required: ['issues']
-  },
-  null,
-  2
-)
-
 const loading = ref(false)
 const saving = ref(false)
-const validating = ref(false)
-const generating = ref(false)
 const dialogVisible = ref(false)
 const editingId = ref<number>()
 const formRef = ref<FormInstance>()
 const skills = ref<Skill[]>([])
 const total = ref(0)
-const schemaResult = ref<{ valid: boolean; message: string }>()
-const aiRequirement = ref('')
 
 const projectTypeOptions = [
   { label: '全部', value: 'ALL' },
@@ -210,22 +176,19 @@ const query = reactive({
 const form = reactive<SkillForm>({
   skillName: '',
   skillCode: '',
-  functionName: 'submit_review_issues',
-  functionDescription: '',
-  parametersSchema: defaultSchema,
   version: '1.0.0',
   projectType: 'ALL',
   ruleMatchingEnabled: 0,
-  matchRules: ''
+  matchRules: '',
+  reviewGuidelines: ''
 })
 
 const rules: FormRules = {
   skillName: [{ required: true, message: '请输入 Skill 名称', trigger: 'blur' }],
   skillCode: [{ required: true, message: '请输入 Skill 编码', trigger: 'blur' }],
-  functionName: [{ required: true, message: '请输入函数名', trigger: 'blur' }],
   projectType: [{ required: true, message: '请选择适用项目', trigger: 'change' }],
-  parametersSchema: [{ required: true, message: '请输入参数 Schema', trigger: 'blur' }],
-  version: [{ required: true, message: '请输入版本', trigger: 'blur' }]
+  version: [{ required: true, message: '请输入版本', trigger: 'blur' }],
+  reviewGuidelines: [{ required: true, message: '请输入检视关注点', trigger: 'blur' }]
 }
 
 async function loadSkills() {
@@ -247,21 +210,17 @@ async function loadSkills() {
 
 function resetForm() {
   editingId.value = undefined
-  schemaResult.value = undefined
   Object.assign(form, {
     id: undefined,
     skillName: '',
     skillCode: '',
-    functionName: 'submit_review_issues',
-    functionDescription: '',
-    parametersSchema: defaultSchema,
     version: '1.0.0',
     projectType: 'ALL',
     ruleMatchingEnabled: 0,
     matchRules: '',
+    reviewGuidelines: '',
     status: undefined
   })
-  aiRequirement.value = ''
 }
 
 function openCreate() {
@@ -271,62 +230,26 @@ function openCreate() {
 
 function openEdit(row: Skill) {
   editingId.value = row.id
-  schemaResult.value = undefined
   Object.assign(form, {
     ...row,
     projectType: row.projectType || 'ALL',
     ruleMatchingEnabled: row.ruleMatchingEnabled ?? 0,
-    matchRules: row.matchRules || ''
+    matchRules: row.matchRules || '',
+    reviewGuidelines: row.reviewGuidelines || ''
   })
-  aiRequirement.value = row.functionDescription || row.skillName
   dialogVisible.value = true
-}
-
-async function generateDraft() {
-  generating.value = true
-  try {
-    const draft = await generateSkillDraft({
-      requirement: aiRequirement.value || form.functionDescription || form.skillName,
-      projectType: form.projectType || 'BACKEND',
-      ruleType: 'CUSTOM',
-      severity: 'MAJOR'
-    })
-    Object.assign(form, {
-      skillName: draft.skillName,
-      skillCode: draft.skillCode,
-      functionName: draft.functionName,
-      functionDescription: draft.functionDescription,
-      parametersSchema: draft.parametersSchema,
-      version: draft.version || '1.0.0',
-      projectType: draft.projectType || form.projectType || 'ALL',
-      ruleMatchingEnabled: draft.ruleMatchingEnabled ?? 1,
-      matchRules: draft.matchRules || defaultMatchRules(draft.projectType || form.projectType)
-    })
-    schemaResult.value = undefined
-    ElMessage.success('AI 已生成 Skill 草稿')
-  } finally {
-    generating.value = false
-  }
-}
-
-async function validateSchema() {
-  validating.value = true
-  try {
-    schemaResult.value = await validateSkillSchema(form.parametersSchema)
-  } finally {
-    validating.value = false
-  }
 }
 
 async function submitForm() {
   await formRef.value?.validate()
   saving.value = true
   try {
+    const payload = { ...form, matchRules: form.ruleMatchingEnabled === 1 ? form.matchRules : '' }
     if (editingId.value) {
-      await updateSkill({ ...form, id: editingId.value, status: form.status ?? 1 })
+      await updateSkill({ ...payload, id: editingId.value, status: form.status ?? 1 })
       ElMessage.success('Skill 已更新')
     } else {
-      await createSkill(form)
+      await createSkill(payload)
       ElMessage.success('Skill 已创建')
     }
     dialogVisible.value = false
@@ -353,30 +276,19 @@ async function removeSkill(row: Skill) {
   await loadSkills()
 }
 
-function schemaSummary(value: string) {
-  try {
-    const parsed = JSON.parse(value)
-    const properties = parsed?.properties ? Object.keys(parsed.properties).join(', ') : 'object'
-    return `${parsed.type || 'schema'}: ${properties}`
-  } catch {
-    return value
-  }
+function guidelinesSummary(value?: string) {
+  const lines = (value || '')
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+  if (lines.length === 0) return '-'
+  return lines.slice(0, 3).join('；')
 }
 
 function projectTypeLabel(value?: string) {
   if (value === 'FRONTEND') return '前端'
   if (value === 'BACKEND') return '后端'
   return '全部'
-}
-
-function defaultMatchRules(projectType?: string) {
-  if (projectType === 'FRONTEND') {
-    return ['ext:js,jsx,ts,tsx,vue', 'path:**/src/**', 'contains:useEffect', 'contains:dangerouslySetInnerHTML', 'contains:fetch('].join('\n')
-  }
-  if (projectType === 'BACKEND') {
-    return ['ext:java', 'path:**/src/main/java/**', 'contains:@RestController', 'contains:@Service', 'contains:@Transactional'].join('\n')
-  }
-  return ''
 }
 
 onMounted(loadSkills)

@@ -22,6 +22,14 @@ public class ReviewIssueEntity extends BaseEntity {
 
     private Long skillId;
 
+    private Long scriptId;
+
+    private String ruleName;
+
+    private String skillName;
+
+    private String scriptName;
+
     private String issueSource;
 
     private String severity;

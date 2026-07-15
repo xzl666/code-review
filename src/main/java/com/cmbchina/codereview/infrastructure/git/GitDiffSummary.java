@@ -15,6 +15,8 @@ public class GitDiffSummary {
 
     private String diffContent = "";
 
+    private List<GitDiffFile> files = Collections.emptyList();
+
     private Integer skippedCommitCount = 0;
 
     private Integer skippedFileCount = 0;

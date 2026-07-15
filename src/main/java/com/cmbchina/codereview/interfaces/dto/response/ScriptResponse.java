@@ -11,15 +11,19 @@ public class ScriptResponse {
 
     private String scriptCode;
 
-    private String scriptLanguage;
+    private String projectType;
+
+    private String ruleType;
+
+    private String severity;
+
+    private String description;
 
     private String scriptContent;
 
-    private String parameterTemplate;
-
     private Integer timeoutSeconds;
 
-    private Integer generatedByAi;
-
     private Integer status;
+
+    private Integer sortOrder;
 }

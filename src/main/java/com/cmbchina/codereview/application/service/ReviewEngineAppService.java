@@ -115,10 +115,10 @@ public class ReviewEngineAppService {
             Path repoDir = localRepositoryManager.prepare(project, branch, resolveToken(project));
             GitDiffSummary diffSummary = gitDiffService.summarize(repoDir, task.getReviewDays());
             AiRuleExecutionResult aiRuleResult = executeAiRules(taskId, project, diffSummary, branch, task.getReviewDays());
-            executeScriptRules(taskId, project, diffSummary, branch);
+            ScriptRuleExecutionResult scriptRuleResult = executeScriptRules(taskId, project, diffSummary, branch, task.getReviewDays());
             reviewIssueFingerprintService.applyHistoricalIgnoredIssues(taskId, project.getId());
             TaskIssueCounters counters = countIssues(taskId);
-            markSuccess(taskId, diffSummary, counters, aiRuleResult);
+            markSuccess(taskId, diffSummary, counters, aiRuleResult, scriptRuleResult);
             generateReport(taskId);
             notificationDispatchService.notifyTaskSuccess(reviewTaskMapper.selectById(taskId));
         } catch (Exception exception) {
@@ -146,26 +146,20 @@ public class ReviewEngineAppService {
         return null;
     }
 
-    private void executeScriptRules(Long taskId, Project project, GitDiffSummary diffSummary, String branch) {
-        LambdaQueryWrapper<ReviewRuleEntity> wrapper = new LambdaQueryWrapper<ReviewRuleEntity>()
-            .eq(ReviewRuleEntity::getStatus, BaseStatus.ENABLED.getValue())
-            .eq(ReviewRuleEntity::getRuleKind, RuleKind.SCRIPT.name())
-            .and(rule -> rule.eq(ReviewRuleEntity::getProjectType, "ALL")
+    private ScriptRuleExecutionResult executeScriptRules(Long taskId,
+                                                         Project project,
+                                                         GitDiffSummary diffSummary,
+                                                         String branch,
+                                                         Integer reviewDays) {
+        LambdaQueryWrapper<ScriptRuleEntity> wrapper = new LambdaQueryWrapper<ScriptRuleEntity>()
+            .eq(ScriptRuleEntity::getStatus, BaseStatus.ENABLED.getValue())
+            .and(rule -> rule.eq(ScriptRuleEntity::getProjectType, "ALL")
                 .or()
-                .eq(ReviewRuleEntity::getProjectType, project.getProjectType()))
-            .orderByAsc(ReviewRuleEntity::getSortOrder)
-            .orderByAsc(ReviewRuleEntity::getId);
-        List<ReviewRuleEntity> rules = reviewRuleMapper.selectList(wrapper);
-        for (ReviewRuleEntity rule : rules) {
-            if (rule.getScriptId() == null) {
-                continue;
-            }
-            ScriptRuleEntity script = scriptRuleMapper.selectById(rule.getScriptId());
-            if (script == null || script.getStatus() == null || script.getStatus() != BaseStatus.ENABLED.getValue()) {
-                continue;
-            }
-            scriptReviewExecutor.execute(taskId, project, rule, script, diffSummary, branch);
-        }
+                .eq(ScriptRuleEntity::getProjectType, project.getProjectType()))
+            .orderByAsc(ScriptRuleEntity::getSortOrder)
+            .orderByAsc(ScriptRuleEntity::getId);
+        List<ScriptRuleEntity> scripts = scriptRuleMapper.selectList(wrapper);
+        return scriptReviewExecutor.execute(taskId, project, scripts, diffSummary, branch, reviewDays);
     }
 
     private AiRuleExecutionResult executeAiRules(Long taskId, Project project, GitDiffSummary diffSummary, String branch, Integer reviewDays) {
@@ -186,10 +180,6 @@ public class ReviewEngineAppService {
         if (chunks.isEmpty()) {
             return result;
         }
-        if (deepSeekProperties.getMaxChunksPerTask() != null && deepSeekProperties.getMaxChunksPerTask() > 0
-            && chunks.size() > deepSeekProperties.getMaxChunksPerTask()) {
-            chunks = chunks.subList(0, deepSeekProperties.getMaxChunksPerTask());
-        }
         for (ReviewRuleEntity rule : rules) {
             if (rule.getSkillId() == null) {
                 continue;
@@ -209,8 +199,8 @@ public class ReviewEngineAppService {
                 try {
                     aiReviewExecutor.execute(taskId, project, rule, skill, chunk, branch, reviewDays);
                 } catch (Exception exception) {
-                    result.warnings.add(limit("AI review skipped for rule " + rule.getId()
-                        + ", skill " + skill.getId()
+                    result.warnings.add(limit("AI review skipped for rule " + sourceName(rule.getRuleName(), rule.getId())
+                        + ", skill " + sourceName(skill.getSkillName(), skill.getId())
                         + ", file " + chunk.getFilePath()
                         + ", chunk " + chunk.getChunkIndex()
                         + ": " + exception.getMessage(), 500));
@@ -248,7 +238,11 @@ public class ReviewEngineAppService {
         reviewTaskMapper.update(null, wrapper);
     }
 
-    private void markSuccess(Long taskId, GitDiffSummary diffSummary, TaskIssueCounters counters, AiRuleExecutionResult aiRuleResult) {
+    private void markSuccess(Long taskId,
+                             GitDiffSummary diffSummary,
+                             TaskIssueCounters counters,
+                             AiRuleExecutionResult aiRuleResult,
+                             ScriptRuleExecutionResult scriptRuleResult) {
         LambdaUpdateWrapper<ReviewTaskEntity> wrapper = new LambdaUpdateWrapper<ReviewTaskEntity>()
             .eq(ReviewTaskEntity::getId, taskId)
             .set(ReviewTaskEntity::getStatus, ReviewTaskStatus.SUCCESS.name())
@@ -264,7 +258,7 @@ public class ReviewEngineAppService {
             .set(ReviewTaskEntity::getSkippedCommitCount, diffSummary.getSkippedCommitCount())
             .set(ReviewTaskEntity::getSkippedFileCount, diffSummary.getSkippedFileCount())
             .set(ReviewTaskEntity::getEndTime, LocalDateTime.now())
-            .set(ReviewTaskEntity::getWarningMessage, warningMessage(diffSummary, aiRuleResult.warnings))
+            .set(ReviewTaskEntity::getWarningMessage, warningMessage(diffSummary, aiRuleResult.warnings, scriptRuleResult.getWarnings()))
             .set(ReviewTaskEntity::getErrorMessage, null);
         reviewTaskMapper.update(null, wrapper);
     }
@@ -290,13 +284,20 @@ public class ReviewEngineAppService {
         return value.substring(0, maxLength);
     }
 
-    private String warningMessage(GitDiffSummary diffSummary, List<String> aiWarnings) {
+    private String sourceName(String name, Long id) {
+        return StringUtils.hasText(name) ? name + " (#" + id + ")" : "#" + id;
+    }
+
+    private String warningMessage(GitDiffSummary diffSummary, List<String> aiWarnings, List<String> scriptWarnings) {
         List<String> warnings = new ArrayList<>();
         if (diffSummary.getWarnings() != null && !diffSummary.getWarnings().isEmpty()) {
             warnings.addAll(diffSummary.getWarnings());
         }
         if (aiWarnings != null && !aiWarnings.isEmpty()) {
             warnings.addAll(aiWarnings);
+        }
+        if (scriptWarnings != null && !scriptWarnings.isEmpty()) {
+            warnings.addAll(scriptWarnings);
         }
         if (warnings.isEmpty()) {
             return null;

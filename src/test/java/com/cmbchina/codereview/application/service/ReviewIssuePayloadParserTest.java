@@ -29,12 +29,16 @@ class ReviewIssuePayloadParserTest {
             + "\"severity\":\"high\""
             + "}]}";
 
+        ReviewRuleEntity rule = rule();
         List<ReviewIssueEntity> issues = parser.parse(
             payload,
             11L,
             project(),
-            rule(),
+            rule,
             33L,
+            "默认结构化 Skill",
+            null,
+            null,
             IssueSource.AI,
             "fallback.java"
         );
@@ -45,6 +49,10 @@ class ReviewIssuePayloadParserTest {
         assertEquals(22L, issue.getProjectId());
         assertEquals(55L, issue.getRuleId());
         assertEquals(33L, issue.getSkillId());
+        assertNull(issue.getScriptId());
+        assertEquals(rule.getRuleName(), issue.getRuleName());
+        assertEquals("默认结构化 Skill", issue.getSkillName());
+        assertNull(issue.getScriptName());
         assertEquals("AI", issue.getIssueSource());
         assertEquals("MAJOR", issue.getSeverity());
         assertEquals("src/App.java", issue.getFilePath());
@@ -67,6 +75,9 @@ class ReviewIssuePayloadParserTest {
             project(),
             rule(),
             null,
+            null,
+            77L,
+            "默认脚本规则",
             IssueSource.SCRIPT,
             "default/File.java"
         );
@@ -74,6 +85,9 @@ class ReviewIssuePayloadParserTest {
         assertEquals(1, issues.size());
         ReviewIssueEntity issue = issues.get(0);
         assertEquals("SCRIPT", issue.getIssueSource());
+        assertNull(issue.getSkillId());
+        assertEquals(77L, issue.getScriptId());
+        assertEquals("默认脚本规则", issue.getScriptName());
         assertEquals("INFO", issue.getSeverity());
         assertEquals("default/File.java", issue.getFilePath());
         assertNull(issue.getStartLine());
@@ -90,11 +104,42 @@ class ReviewIssuePayloadParserTest {
             project(),
             rule(),
             null,
+            null,
+            null,
+            null,
             IssueSource.AI,
             "fallback.java"
         );
 
         assertEquals(0, issues.size());
+    }
+
+    @Test
+    void parsesStandaloneScriptIssueWithScriptDefaults() throws Exception {
+        List<ReviewIssueEntity> issues = parser.parse(
+            "{\"issues\":[{\"filePath\":\"src/main/java/demo/userService.java\",\"summary\":\"命名不规范\"}]}",
+            11L,
+            project(),
+            null,
+            null,
+            null,
+            77L,
+            "后端 Java 命名规范检查",
+            IssueSource.SCRIPT,
+            "",
+            "MINOR",
+            "NAMING",
+            "后端 Java 命名规范检查"
+        );
+
+        assertEquals(1, issues.size());
+        ReviewIssueEntity issue = issues.get(0);
+        assertNull(issue.getRuleId());
+        assertEquals(77L, issue.getScriptId());
+        assertEquals("SCRIPT", issue.getIssueSource());
+        assertEquals("MINOR", issue.getSeverity());
+        assertEquals("NAMING", issue.getIssueType());
+        assertEquals("命名不规范", issue.getSummary());
     }
 
     private Project project() {

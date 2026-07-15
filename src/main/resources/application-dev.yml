@@ -1,6 +1,6 @@
 spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://${CODE_REVIEW_DB_HOST:43.163.119.246}:${CODE_REVIEW_DB_PORT:33066}/${CODE_REVIEW_DB_NAME:code_review}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://${CODE_REVIEW_DB_HOST:127.0.0.1}:${CODE_REVIEW_DB_PORT:3306}/${CODE_REVIEW_DB_NAME:code_review}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: ${CODE_REVIEW_DB_USERNAME:root}
     password: ${CODE_REVIEW_DB_PASSWORD:1234}
