@@ -7,8 +7,10 @@ export interface DashboardOverview {
   todayIssueCount: number
   openIssueCount: number
   todayAiCallCount: number
-  blockerCount: number
+  totalTokenCount: number
+  todayTokenCount: number
   criticalCount: number
+  highCount: number
 }
 
 export interface NameValue {

@@ -17,21 +17,12 @@ public class RuleUpdateRequest {
     private String ruleCode;
 
     @NotBlank(message = "不能为空")
-    private String ruleKind;
-
-    @NotBlank(message = "不能为空")
-    private String ruleType;
-
-    @NotBlank(message = "不能为空")
-    private String severity;
-
-    private String projectType;
-
     private String promptTemplate;
 
-    private Long skillId;
+    @NotBlank(message = "不能为空")
+    private String pathPattern;
 
-    private Long scriptId;
+    private Integer mergeSystemRule;
 
     private Integer status;
 

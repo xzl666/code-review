@@ -90,6 +90,16 @@ export function testSendNotifyConfig(data: { configId?: number; webhookUrl?: str
   return post<NotifyTestResult>('/api/notify-config/test-send', data)
 }
 
+export interface ZhaohuTestResult {
+  successCount: number
+  failureCount: number
+  failureReasons: string[]
+}
+
+export function testSendZhaohu(data: { userIds: string[]; title: string; content: string; summary?: string }) {
+  return post<ZhaohuTestResult>('/api/zhaohu/test-send', data)
+}
+
 export function pageNotifyTemplates(query: { templateName?: string; templateCode?: string; channelType?: string; eventType?: string; enabled?: number; pageNo: number; pageSize: number }) {
   return post<PageResponse<NotifyTemplate>>('/api/notify-template/page', query)
 }

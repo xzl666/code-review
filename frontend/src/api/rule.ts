@@ -4,13 +4,9 @@ export interface Rule {
   id: number
   ruleName: string
   ruleCode: string
-  ruleKind: string
-  ruleType: string
-  severity: string
-  projectType: string
-  promptTemplate?: string
-  skillId?: number
-  scriptId?: number
+  promptTemplate: string
+  pathPattern: string
+  mergeSystemRule: number
   status: number
   sortOrder: number
 }
@@ -19,13 +15,9 @@ export interface RuleForm {
   id?: number
   ruleName: string
   ruleCode: string
-  ruleKind: string
-  ruleType: string
-  severity: string
-  projectType: string
-  promptTemplate?: string
-  skillId?: number
-  scriptId?: number
+  promptTemplate: string
+  pathPattern: string
+  mergeSystemRule: number
   status?: number
   sortOrder: number
 }
@@ -38,29 +30,6 @@ export interface RuleQuery {
   status?: number
   pageNo: number
   pageSize: number
-}
-
-export interface AiGenerateScriptRequest {
-  requirement?: string
-  projectType?: string
-  ruleType?: string
-  severity?: string
-  scriptLanguage?: string
-}
-
-export interface AiGeneratedScriptDraft {
-  scriptName: string
-  scriptCode: string
-  scriptLanguage: string
-  scriptContent: string
-  parameterTemplate?: string
-  timeoutSeconds: number
-  ruleName: string
-  ruleCode: string
-  ruleType: string
-  severity: string
-  projectType: string
-  promptTemplate?: string
 }
 
 export function pageRules(query: RuleQuery) {
@@ -85,8 +54,4 @@ export function enableRule(id: number) {
 
 export function disableRule(id: number) {
   return post<void>('/api/rule/disable', { id })
-}
-
-export function generateScriptDraft(data: AiGenerateScriptRequest) {
-  return post<AiGeneratedScriptDraft>('/api/rule/generate-script', data)
 }

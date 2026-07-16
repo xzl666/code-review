@@ -1,5 +1,6 @@
 package com.cmbchina.codereview.interfaces.dto.response;
 
+import java.util.List;
 import lombok.Data;
 
 @Data
@@ -8,8 +9,6 @@ public class ProjectResponse {
     private Long id;
 
     private String projectName;
-
-    private String projectCode;
 
     private String projectType;
 
@@ -21,7 +20,9 @@ public class ProjectResponse {
 
     private String ownerName;
 
-    private Integer reviewDays;
+    private List<String> ownerUserIds;
+
+    private List<SystemUserResponse> owners;
 
     private String scheduleCron;
 

@@ -7,16 +7,33 @@ export interface ReviewTask {
   projectName: string
   triggerType: string
   reviewBranch: string
-  reviewDays: number
+  reviewMode: 'RANGE' | 'YESTERDAY' | 'COMMIT' | 'WORKSPACE' | 'SCAN'
+  baseRef?: string
+  targetRef?: string
+  commitRef?: string
+  scanPath?: string
+  scanExclude?: string
+  scanNoPlan?: number
+  maxTokensBudget?: number
+  reviewBackground?: string
+  reviewStartTime?: string
+  reviewEndTime?: string
+  notifyEnabled?: number
   commitCount: number
   diffFileCount: number
   issueCount: number
-  blockerCount: number
   criticalCount: number
-  majorCount: number
-  minorCount: number
-  infoCount: number
+  highCount: number
+  mediumCount: number
+  lowCount: number
   aiCallCount: number
+  aiSuccessCount: number
+  aiFailureCount: number
+  inputTokenCount: number
+  outputTokenCount: number
+  totalTokenCount: number
+  cacheReadTokenCount: number
+  cacheWriteTokenCount: number
   skippedCommitCount?: number
   skippedFileCount?: number
   status: string
@@ -38,7 +55,16 @@ export interface ReviewTaskQuery {
 export interface ManualReviewStartRequest {
   projectId: number
   branch?: string
-  reviewDays?: number
+  reviewMode: 'RANGE' | 'YESTERDAY' | 'COMMIT' | 'WORKSPACE' | 'SCAN'
+  baseRef?: string
+  targetRef?: string
+  commitRef?: string
+  scanPath?: string
+  scanExclude?: string
+  scanNoPlan?: boolean
+  maxTokensBudget?: number
+  background?: string
+  sendNotification?: boolean
 }
 
 export function pageReviewTasks(query: ReviewTaskQuery) {

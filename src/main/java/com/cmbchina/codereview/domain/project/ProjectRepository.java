@@ -17,6 +17,8 @@ public interface ProjectRepository {
 
     List<Project> listScheduledEnabled();
 
+    List<Project> listEnabled();
+
     void logicalDelete(Long id);
 
     void updateStatus(Long id, Integer status);

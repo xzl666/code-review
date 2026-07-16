@@ -54,7 +54,7 @@ class ReviewIssuePayloadParserTest {
         assertEquals("默认结构化 Skill", issue.getSkillName());
         assertNull(issue.getScriptName());
         assertEquals("AI", issue.getIssueSource());
-        assertEquals("MAJOR", issue.getSeverity());
+        assertEquals("HIGH", issue.getSeverity());
         assertEquals("src/App.java", issue.getFilePath());
         assertEquals(42, issue.getStartLine());
         assertEquals(45, issue.getEndLine());
@@ -88,7 +88,7 @@ class ReviewIssuePayloadParserTest {
         assertNull(issue.getSkillId());
         assertEquals(77L, issue.getScriptId());
         assertEquals("默认脚本规则", issue.getScriptName());
-        assertEquals("INFO", issue.getSeverity());
+        assertEquals("LOW", issue.getSeverity());
         assertEquals("default/File.java", issue.getFilePath());
         assertNull(issue.getStartLine());
         assertNull(issue.getEndLine());
@@ -127,7 +127,7 @@ class ReviewIssuePayloadParserTest {
             "后端 Java 命名规范检查",
             IssueSource.SCRIPT,
             "",
-            "MINOR",
+            "MEDIUM",
             "NAMING",
             "后端 Java 命名规范检查"
         );
@@ -137,7 +137,7 @@ class ReviewIssuePayloadParserTest {
         assertNull(issue.getRuleId());
         assertEquals(77L, issue.getScriptId());
         assertEquals("SCRIPT", issue.getIssueSource());
-        assertEquals("MINOR", issue.getSeverity());
+        assertEquals("MEDIUM", issue.getSeverity());
         assertEquals("NAMING", issue.getIssueType());
         assertEquals("命名不规范", issue.getSummary());
     }
@@ -153,7 +153,7 @@ class ReviewIssuePayloadParserTest {
         rule.setId(55L);
         rule.setRuleName("默认规则");
         rule.setRuleType("BUG");
-        rule.setSeverity("MINOR");
+        rule.setSeverity("MEDIUM");
         return rule;
     }
 }

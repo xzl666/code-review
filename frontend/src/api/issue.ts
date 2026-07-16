@@ -5,6 +5,10 @@ export interface ReviewIssue {
   taskId: number
   taskNo?: string
   projectId: number
+  assigneeUserId?: string
+  assigneeName?: string
+  assigneeEmployeeId?: string
+  commitAuthor?: string
   ruleId?: number
   skillId?: number
   scriptId?: number

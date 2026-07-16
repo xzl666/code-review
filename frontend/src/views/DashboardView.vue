@@ -49,7 +49,7 @@ import * as echarts from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import type { ECharts } from 'echarts/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Bot, FolderGit2, ListChecks, Workflow } from 'lucide-vue-next'
+import { Bot, Coins, FolderGit2, ListChecks, Workflow } from 'lucide-vue-next'
 import { getDashboardOverview, getIssueTrend, getSeverityDistribution, type NameValue } from '@/api/dashboard'
 
 echarts.use([LineChart, GridComponent, TooltipComponent, CanvasRenderer])
@@ -63,8 +63,10 @@ const overview = ref({
   todayIssueCount: 0,
   openIssueCount: 0,
   todayAiCallCount: 0,
-  blockerCount: 0,
-  criticalCount: 0
+  totalTokenCount: 0,
+  todayTokenCount: 0,
+  criticalCount: 0,
+  highCount: 0
 })
 const trend = ref<NameValue[]>([])
 const severityRows = ref<NameValue[]>([])
@@ -88,25 +90,35 @@ const metrics = computed(() => [
   {
     label: '开放问题',
     value: String(overview.value.openIssueCount),
-    note: `阻断 ${overview.value.blockerCount} / 严重 ${overview.value.criticalCount}`,
+    note: `严重 ${overview.value.criticalCount} / 高 ${overview.value.highCount}`,
     icon: ListChecks,
     tone: 'tone-red'
   },
   {
-    label: 'AI 调用',
+    label: '模型调用',
     value: String(overview.value.todayAiCallCount),
     note: '今日累计',
     icon: Bot,
     tone: 'tone-green'
+  },
+  {
+    label: 'Token 消耗',
+    value: formatNumber(overview.value.totalTokenCount),
+    note: `今日 ${formatNumber(overview.value.todayTokenCount)}`,
+    icon: Coins,
+    tone: 'tone-cyan'
   }
 ])
 
+function formatNumber(value: number) {
+  return new Intl.NumberFormat('zh-CN').format(value || 0)
+}
+
 const severityColors: Record<string, string> = {
-  阻断: '#9f1239',
   严重: '#dc2626',
-  主要: '#ea580c',
-  次要: '#2563eb',
-  提示: '#64748b'
+  高: '#ea580c',
+  中: '#2563eb',
+  低: '#64748b'
 }
 
 const severity = computed(() =>

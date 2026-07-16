@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus/es/components/message/index.mjs'
+import { currentUserId } from '@/utils/currentUser'
 
 export interface ApiResponse<T> {
   code: string
@@ -37,7 +38,19 @@ http.interceptors.response.use(
   }
 )
 
+http.interceptors.request.use((config) => {
+  config.headers['X-User-Id'] = currentUserId()
+  return config
+})
+
 export async function post<T>(url: string, data?: unknown): Promise<T> {
   const response = await http.post<ApiResponse<T>>(url, data || {})
+  return response.data.data
+}
+
+export async function postForm<T>(url: string, formData: FormData): Promise<T> {
+  const response = await http.post<ApiResponse<T>>(url, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
   return response.data.data
 }

@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.cmbchina.codereview.common.enums.ReviewTaskStatus;
 import com.cmbchina.codereview.common.enums.TriggerType;
+import com.cmbchina.codereview.common.enums.OcrReviewMode;
 import com.cmbchina.codereview.common.exception.BizException;
 import com.cmbchina.codereview.common.exception.ErrorCode;
 import com.cmbchina.codereview.common.response.PageResponse;
@@ -18,6 +19,8 @@ import com.cmbchina.codereview.interfaces.dto.response.ReviewTaskResponse;
 import com.cmbchina.codereview.interfaces.dto.response.ReviewTaskStatisticsResponse;
 import javax.annotation.PostConstruct;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -61,7 +64,7 @@ public class ReviewTaskAppService {
         if (project == null) {
             throw new BizException(ErrorCode.NOT_FOUND, "项目不存在");
         }
-        if (hasActiveTask(project.getId())) {
+        if (TriggerType.MANUAL.name().equals(triggerType) && hasActiveTask(project.getId())) {
             throw new BizException(ErrorCode.BIZ_ERROR, "该项目已有待执行或执行中的检视任务，请等待完成后再触发");
         }
         ReviewTaskEntity entity = new ReviewTaskEntity();
@@ -70,16 +73,42 @@ public class ReviewTaskAppService {
         entity.setProjectName(project.getProjectName());
         entity.setTriggerType(triggerType);
         entity.setReviewBranch(defaultIfBlank(request.getBranch(), project.getDefaultBranch()));
-        entity.setReviewDays(request.getReviewDays() == null ? project.getReviewDays() : request.getReviewDays());
+        entity.setReviewDays(0);
+        OcrReviewMode reviewMode = reviewMode(request.getReviewMode());
+        if (reviewMode == OcrReviewMode.YESTERDAY) {
+            LocalDate yesterday = LocalDate.now(ZoneId.of("Asia/Shanghai")).minusDays(1);
+            request.setReviewStartTime(yesterday.atStartOfDay());
+            request.setReviewEndTime(yesterday.plusDays(1).atStartOfDay());
+        }
+        validateModeArguments(reviewMode, request);
+        entity.setReviewMode(reviewMode.name());
+        entity.setBaseRef(trim(request.getBaseRef()));
+        entity.setTargetRef(defaultIfBlank(request.getTargetRef(), entity.getReviewBranch()));
+        entity.setCommitRef(trim(request.getCommitRef()));
+        entity.setScanPath(trim(request.getScanPath()));
+        entity.setScanExclude(trim(request.getScanExclude()));
+        entity.setScanNoPlan(Boolean.TRUE.equals(request.getScanNoPlan()) ? 1 : 0);
+        entity.setMaxTokensBudget(request.getMaxTokensBudget() == null ? 500000L : request.getMaxTokensBudget());
+        entity.setReviewBackground(trim(request.getBackground()));
+        entity.setReviewStartTime(request.getReviewStartTime());
+        entity.setReviewEndTime(request.getReviewEndTime());
+        entity.setNotifyEnabled(TriggerType.SCHEDULE.name().equals(triggerType)
+            || Boolean.TRUE.equals(request.getSendNotification()) ? 1 : 0);
         entity.setCommitCount(0);
         entity.setDiffFileCount(0);
         entity.setIssueCount(0);
-        entity.setBlockerCount(0);
         entity.setCriticalCount(0);
-        entity.setMajorCount(0);
-        entity.setMinorCount(0);
-        entity.setInfoCount(0);
+        entity.setHighCount(0);
+        entity.setMediumCount(0);
+        entity.setLowCount(0);
         entity.setAiCallCount(0);
+        entity.setAiSuccessCount(0);
+        entity.setAiFailureCount(0);
+        entity.setInputTokenCount(0L);
+        entity.setOutputTokenCount(0L);
+        entity.setTotalTokenCount(0L);
+        entity.setCacheReadTokenCount(0L);
+        entity.setCacheWriteTokenCount(0L);
         entity.setSkippedCommitCount(0);
         entity.setSkippedFileCount(0);
         entity.setStatus(ReviewTaskStatus.PENDING.name());
@@ -186,16 +215,33 @@ public class ReviewTaskAppService {
         response.setProjectName(entity.getProjectName());
         response.setTriggerType(entity.getTriggerType());
         response.setReviewBranch(entity.getReviewBranch());
-        response.setReviewDays(entity.getReviewDays());
+        response.setReviewMode(entity.getReviewMode());
+        response.setBaseRef(entity.getBaseRef());
+        response.setTargetRef(entity.getTargetRef());
+        response.setCommitRef(entity.getCommitRef());
+        response.setScanPath(entity.getScanPath());
+        response.setScanExclude(entity.getScanExclude());
+        response.setScanNoPlan(entity.getScanNoPlan());
+        response.setMaxTokensBudget(entity.getMaxTokensBudget());
+        response.setReviewBackground(entity.getReviewBackground());
+        response.setReviewStartTime(entity.getReviewStartTime());
+        response.setReviewEndTime(entity.getReviewEndTime());
+        response.setNotifyEnabled(entity.getNotifyEnabled());
         response.setCommitCount(entity.getCommitCount());
         response.setDiffFileCount(entity.getDiffFileCount());
         response.setIssueCount(entity.getIssueCount());
-        response.setBlockerCount(entity.getBlockerCount());
         response.setCriticalCount(entity.getCriticalCount());
-        response.setMajorCount(entity.getMajorCount());
-        response.setMinorCount(entity.getMinorCount());
-        response.setInfoCount(entity.getInfoCount());
-        response.setAiCallCount(entity.getAiCallCount());
+        response.setHighCount(entity.getHighCount());
+        response.setMediumCount(entity.getMediumCount());
+        response.setLowCount(entity.getLowCount());
+        response.setAiCallCount(value(entity.getAiSuccessCount()) + value(entity.getAiFailureCount()));
+        response.setAiSuccessCount(entity.getAiSuccessCount());
+        response.setAiFailureCount(entity.getAiFailureCount());
+        response.setInputTokenCount(entity.getInputTokenCount());
+        response.setOutputTokenCount(entity.getOutputTokenCount());
+        response.setTotalTokenCount(entity.getTotalTokenCount());
+        response.setCacheReadTokenCount(entity.getCacheReadTokenCount());
+        response.setCacheWriteTokenCount(entity.getCacheWriteTokenCount());
         response.setSkippedCommitCount(entity.getSkippedCommitCount());
         response.setSkippedFileCount(entity.getSkippedFileCount());
         response.setStatus(entity.getStatus());
@@ -212,6 +258,45 @@ public class ReviewTaskAppService {
 
     private String defaultIfBlank(String value, String defaultValue) {
         return StringUtils.hasText(value) ? value : defaultValue;
+    }
+
+    private int value(Integer count) {
+        return count == null ? 0 : count;
+    }
+
+    private OcrReviewMode reviewMode(String value) {
+        try {
+            return StringUtils.hasText(value) ? OcrReviewMode.valueOf(value.trim().toUpperCase()) : OcrReviewMode.RANGE;
+        } catch (Exception exception) {
+            throw new BizException(ErrorCode.PARAM_ERROR, "不支持的检视方式");
+        }
+    }
+
+    private void validateModeArguments(OcrReviewMode mode, ManualReviewStartRequest request) {
+        if (mode == OcrReviewMode.COMMIT && !StringUtils.hasText(request.getCommitRef())) {
+            throw new BizException(ErrorCode.PARAM_ERROR, "单提交检视必须填写提交 SHA 或标签");
+        }
+        boolean scheduledTimeRange = request.getReviewStartTime() != null && request.getReviewEndTime() != null;
+        if (mode == OcrReviewMode.RANGE && !scheduledTimeRange && (!StringUtils.hasText(request.getBaseRef())
+            || !StringUtils.hasText(request.getTargetRef()))) {
+            throw new BizException(ErrorCode.PARAM_ERROR, "分支区间检视必须填写起始引用和目标引用");
+        }
+        if (scheduledTimeRange && !request.getReviewStartTime().isBefore(request.getReviewEndTime())) {
+            throw new BizException(ErrorCode.PARAM_ERROR, "检视开始时间必须早于结束时间");
+        }
+        if (request.getMaxTokensBudget() != null && request.getMaxTokensBudget() < 0L) {
+            throw new BizException(ErrorCode.PARAM_ERROR, "Token 预算不能小于 0");
+        }
+        if (request.getMaxTokensBudget() != null && request.getMaxTokensBudget() > Integer.MAX_VALUE) {
+            throw new BizException(ErrorCode.PARAM_ERROR, "Token 预算不能大于 " + Integer.MAX_VALUE);
+        }
+        if (StringUtils.hasText(request.getBackground()) && request.getBackground().length() > 8000) {
+            throw new BizException(ErrorCode.PARAM_ERROR, "业务背景不能超过 8000 个字符");
+        }
+    }
+
+    private String trim(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
     }
 
     private void submitAfterCommit(Long taskId) {

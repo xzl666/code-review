@@ -105,7 +105,7 @@ public class ScriptReviewExecutor {
                 script.getScriptName(),
                 IssueSource.SCRIPT,
                 "",
-                defaultIfBlank(script.getSeverity(), "MAJOR"),
+                defaultIfBlank(script.getSeverity(), "HIGH"),
                 defaultIfBlank(script.getRuleType(), "CUSTOM"),
                 defaultIfBlank(script.getScriptName(), "脚本规则")
             );
@@ -123,7 +123,6 @@ public class ScriptReviewExecutor {
         Map<String, Object> projectInput = new LinkedHashMap<>();
         projectInput.put("id", project.getId());
         projectInput.put("name", project.getProjectName());
-        projectInput.put("code", project.getProjectCode());
         projectInput.put("type", project.getProjectType());
         input.put("project", projectInput);
         input.put("branch", branch);

@@ -130,7 +130,7 @@ public class AiDraftGenerationService {
             + "需求：" + value(request.getRequirement(), "生成一条 Java Web 项目常用检视规则") + "\n"
             + "项目类型：" + value(request.getProjectType(), "BACKEND") + "\n"
             + "问题类型：" + value(request.getRuleType(), "CUSTOM") + "\n"
-            + "严重度：" + value(request.getSeverity(), "MAJOR") + "\n"
+            + "严重度：" + value(request.getSeverity(), "HIGH") + "\n"
             + "脚本语言：PYTHON\n"
             + "返回 JSON 字段必须完整包含：scriptName、scriptCode、scriptLanguage、scriptContent、timeoutSeconds、"
             + "ruleName、ruleCode、ruleType、severity、projectType、promptTemplate。"
@@ -142,7 +142,7 @@ public class AiDraftGenerationService {
             + "需求：" + value(request.getRequirement(), "生成一条 Java Web 项目常用 AI 检视 Skill") + "\n"
             + "项目类型：" + value(request.getProjectType(), "BACKEND") + "\n"
             + "问题类型：" + value(request.getRuleType(), "CUSTOM") + "\n"
-            + "严重度：" + value(request.getSeverity(), "MAJOR") + "\n"
+            + "严重度：" + value(request.getSeverity(), "HIGH") + "\n"
             + "返回 JSON 字段必须完整包含：skillName、skillCode、functionName、functionDescription、parametersSchema、version、"
             + "projectType、ruleMatchingEnabled、matchRules、ruleName、ruleCode、ruleType、severity、promptTemplate。"
             + "skillCode 和 ruleCode 使用大写下划线，version 默认为 1.0.0。"
@@ -224,7 +224,7 @@ public class AiDraftGenerationService {
         response.setTimeoutSeconds(response.getTimeoutSeconds() == null ? 20 : response.getTimeoutSeconds());
         response.setProjectType(value(response.getProjectType(), value(request.getProjectType(), "BACKEND")));
         response.setRuleType(value(response.getRuleType(), value(request.getRuleType(), "CUSTOM")));
-        response.setSeverity(value(response.getSeverity(), value(request.getSeverity(), "MAJOR")));
+        response.setSeverity(value(response.getSeverity(), value(request.getSeverity(), "HIGH")));
         response.setParameterTemplate(value(response.getParameterTemplate(), "stdin JSON：project、branch、reviewDays、diffContent、filePaths、files"));
     }
 
@@ -237,7 +237,7 @@ public class AiDraftGenerationService {
         response.setVersion(value(response.getVersion(), "1.0.0"));
         response.setProjectType(value(response.getProjectType(), value(request.getProjectType(), "BACKEND")));
         response.setRuleType(value(response.getRuleType(), value(request.getRuleType(), "CUSTOM")));
-        response.setSeverity(value(response.getSeverity(), value(request.getSeverity(), "MAJOR")));
+        response.setSeverity(value(response.getSeverity(), value(request.getSeverity(), "HIGH")));
         response.setParametersSchema(value(response.getParametersSchema(), DEFAULT_ISSUE_SCHEMA));
         response.setRuleMatchingEnabled(response.getRuleMatchingEnabled() == null ? 1 : response.getRuleMatchingEnabled());
         response.setMatchRules(value(response.getMatchRules(), defaultMatchRules(response.getProjectType())));

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.cmbchina.codereview.common.enums.ReviewIssueStatus;
+import com.cmbchina.codereview.common.context.CurrentUserContext;
 import com.cmbchina.codereview.common.exception.BizException;
 import com.cmbchina.codereview.common.exception.ErrorCode;
 import com.cmbchina.codereview.common.response.PageResponse;
@@ -62,7 +63,7 @@ public class ReviewIssueAppService {
     }
 
     public ReviewIssueResponse detail(Long id) {
-        return toResponse(ensureExists(id));
+        return toResponse(ensureVisible(ensureExists(id)));
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -81,23 +82,25 @@ public class ReviewIssueAppService {
         response.setOpenIssues(count(request, "status", ReviewIssueStatus.OPEN.name()));
         response.setIgnoredIssues(count(request, "status", ReviewIssueStatus.IGNORED.name()));
         response.setFixedIssues(count(request, "status", ReviewIssueStatus.FIXED.name()));
-        response.setBlockerCount(count(request, "severity", "BLOCKER"));
         response.setCriticalCount(count(request, "severity", "CRITICAL"));
-        response.setMajorCount(count(request, "severity", "MAJOR"));
-        response.setMinorCount(count(request, "severity", "MINOR"));
-        response.setInfoCount(count(request, "severity", "INFO"));
+        response.setHighCount(count(request, "severity", "HIGH"));
+        response.setMediumCount(count(request, "severity", "MEDIUM"));
+        response.setLowCount(count(request, "severity", "LOW"));
         return response;
     }
 
     public String export(ReviewIssuePageRequest request) {
         List<ReviewIssueResponse> records = page(request).getRecords();
         StringBuilder builder = new StringBuilder();
-        builder.append("id,taskId,taskNo,projectId,source,ruleName,skillName,scriptName,severity,status,filePath,startLine,endLine,summary\n");
+        builder.append("id,taskId,taskNo,projectId,assigneeName,employeeId,commitAuthor,source,ruleName,skillName,scriptName,severity,status,filePath,startLine,endLine,summary\n");
         for (ReviewIssueResponse issue : records) {
             builder.append(issue.getId()).append(',')
                 .append(issue.getTaskId()).append(',')
                 .append(escape(issue.getTaskNo())).append(',')
                 .append(issue.getProjectId()).append(',')
+                .append(escape(issue.getAssigneeName())).append(',')
+                .append(escape(issue.getAssigneeEmployeeId())).append(',')
+                .append(escape(issue.getCommitAuthor())).append(',')
                 .append(escape(issue.getIssueSource())).append(',')
                 .append(escape(issue.getRuleName())).append(',')
                 .append(escape(issue.getSkillName())).append(',')
@@ -129,6 +132,7 @@ public class ReviewIssueAppService {
             .eq(StringUtils.hasText(request.getSeverity()), ReviewIssueEntity::getSeverity, request.getSeverity())
             .eq(StringUtils.hasText(request.getIssueSource()), ReviewIssueEntity::getIssueSource, request.getIssueSource())
             .eq(StringUtils.hasText(request.getStatus()), ReviewIssueEntity::getStatus, request.getStatus());
+        applyVisibility(wrapper);
         if (request.getTaskId() != null) {
             wrapper.eq(ReviewIssueEntity::getTaskId, request.getTaskId());
             return wrapper;
@@ -149,7 +153,7 @@ public class ReviewIssueAppService {
     }
 
     private void updateStatus(Long id, String status) {
-        ensureExists(id);
+        ensureVisible(ensureExists(id));
         LambdaUpdateWrapper<ReviewIssueEntity> wrapper = new LambdaUpdateWrapper<ReviewIssueEntity>()
             .eq(ReviewIssueEntity::getId, id)
             .set(ReviewIssueEntity::getStatus, status);
@@ -165,12 +169,44 @@ public class ReviewIssueAppService {
         return entity;
     }
 
+    private void applyVisibility(LambdaQueryWrapper<ReviewIssueEntity> wrapper) {
+        if (CurrentUserContext.isAdmin()) {
+            return;
+        }
+        String userId = CurrentUserContext.get();
+        if (!StringUtils.hasText(userId) || !userId.matches("[A-Fa-f0-9]{32,64}")) {
+            wrapper.eq(ReviewIssueEntity::getId, -1L);
+            return;
+        }
+        wrapper.and(query -> query.eq(ReviewIssueEntity::getAssigneeUserId, userId)
+            .or().inSql(ReviewIssueEntity::getProjectId,
+                "SELECT project_id FROM cr_project_owner WHERE user_id = '" + userId + "'"));
+    }
+
+    private ReviewIssueEntity ensureVisible(ReviewIssueEntity entity) {
+        if (CurrentUserContext.isAdmin()) {
+            return entity;
+        }
+        String userId = CurrentUserContext.get();
+        boolean assignee = StringUtils.hasText(userId) && userId.equals(entity.getAssigneeUserId());
+        Integer ownerCount = StringUtils.hasText(userId) ? reviewIssueMapper.selectCount(
+            new LambdaQueryWrapper<ReviewIssueEntity>().eq(ReviewIssueEntity::getId, entity.getId())
+                .inSql(ReviewIssueEntity::getProjectId,
+                    "SELECT project_id FROM cr_project_owner WHERE user_id = '" + userId.replace("'", "") + "'")).intValue() : 0;
+        if (!assignee && ownerCount == 0) throw new BizException(ErrorCode.NOT_FOUND, "问题不存在或无权访问");
+        return entity;
+    }
+
     private ReviewIssueResponse toResponse(ReviewIssueEntity entity) {
         ReviewIssueResponse response = new ReviewIssueResponse();
         response.setId(entity.getId());
         response.setTaskId(entity.getTaskId());
         response.setTaskNo(taskNo(entity.getTaskId()));
         response.setProjectId(entity.getProjectId());
+        response.setAssigneeUserId(entity.getAssigneeUserId());
+        response.setAssigneeName(entity.getAssigneeName());
+        response.setAssigneeEmployeeId(entity.getAssigneeEmployeeId());
+        response.setCommitAuthor(entity.getCommitAuthor());
         response.setRuleId(entity.getRuleId());
         response.setSkillId(entity.getSkillId());
         response.setScriptId(entity.getScriptId());
@@ -360,10 +396,10 @@ public class ReviewIssueAppService {
             return null;
         }
         Project project = projectRepository.findById(entity.getProjectId());
-        if (project == null || !StringUtils.hasText(project.getProjectCode())) {
+        if (project == null) {
             return null;
         }
-        Path repoDir = Paths.get("target", "review-repos", safeName(project.getProjectCode() + "-" + project.getId()));
+        Path repoDir = Paths.get("target", "review-repos", "project-" + project.getId());
         Path filePath = repoDir.resolve(entity.getFilePath()).normalize();
         if (!filePath.startsWith(repoDir.normalize()) || !Files.exists(filePath) || !Files.isRegularFile(filePath)) {
             return null;

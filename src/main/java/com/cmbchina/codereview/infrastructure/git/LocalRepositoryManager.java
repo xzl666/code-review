@@ -7,7 +7,6 @@ import com.cmbchina.codereview.common.util.MaskUtils;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
-import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -26,16 +25,22 @@ public class LocalRepositoryManager {
 
     private final Path repoRoot = Paths.get("target", "review-repos");
 
-    public Path prepare(Project project, String branch, String token) {
+    private final GiteeSshCredentialManager credentialManager;
+
+    public LocalRepositoryManager(GiteeSshCredentialManager credentialManager) {
+        this.credentialManager = credentialManager;
+    }
+
+    public Path prepare(Project project, String branch) {
         try {
             Files.createDirectories(repoRoot);
-            Path repoDir = repoRoot.resolve(safeName(project.getProjectCode() + "-" + project.getId()));
+            Path repoDir = repoRoot.resolve("project-" + project.getId());
             if (Files.exists(repoDir.resolve(".git"))) {
-                refresh(repoDir, project.getRepoUrl(), branch, token);
+                refresh(repoDir, project.getRepoUrl(), branch);
                 return repoDir;
             }
-            runWithRepoUrlCandidates(repoRoot, project.getRepoUrl(), token,
-                repoUrl -> new String[]{"git", "clone", "--branch", branch, "--single-branch", repoUrl, repoDir.toAbsolutePath().toString()});
+            String repoUrl = credentialManager.normalizeRepositoryUrl(project.getRepoUrl());
+            runRemote(repoRoot, "git", "clone", "--branch", branch, "--single-branch", repoUrl, repoDir.toAbsolutePath().toString());
             return repoDir;
         } catch (BizException exception) {
             throw exception;
@@ -44,14 +49,45 @@ public class LocalRepositoryManager {
         }
     }
 
-    private void refresh(Path repoDir, String repoUrl, String branch, String token) {
+    public String ensureRef(Path repoDir, String ref) {
+        if (!StringUtils.hasText(ref)) {
+            throw new BizException(ErrorCode.BIZ_ERROR, "Git ref 不能为空");
+        }
+        if (canResolve(repoDir, ref)) {
+            return ref;
+        }
+        String remoteRef = "origin/" + ref;
+        if (canResolve(repoDir, remoteRef)) {
+            return remoteRef;
+        }
+        runRemote(repoDir, "git", "fetch", "origin", ref, "--depth=200");
+        if (canResolve(repoDir, ref)) {
+            return ref;
+        }
+        if (canResolve(repoDir, remoteRef)) {
+            return remoteRef;
+        }
+        if (canResolve(repoDir, "FETCH_HEAD")) {
+            return run(repoDir, "git", "rev-parse", "FETCH_HEAD^{commit}").getStdout().trim();
+        }
+        throw new BizException(ErrorCode.BIZ_ERROR, "无法解析 Git ref: " + ref);
+    }
+
+    private boolean canResolve(Path repoDir, String ref) {
         try {
-            runWithRepoUrlCandidates(repoDir, repoUrl, token, candidate -> {
-                run(repoDir, "git", "remote", "set-url", "origin", candidate);
-                run(repoDir, "git", "fetch", "origin", branchRefSpec(branch), "--prune", "--depth=200");
-                run(repoDir, "git", "checkout", "-B", branch, "origin/" + branch);
-                return new String[]{"git", "status", "--short"};
-            });
+            run(repoDir, "git", "rev-parse", "--verify", ref + "^{commit}");
+            return true;
+        } catch (BizException ignored) {
+            return false;
+        }
+    }
+
+    private void refresh(Path repoDir, String repoUrl, String branch) {
+        try {
+            String sshUrl = credentialManager.normalizeRepositoryUrl(repoUrl);
+            run(repoDir, "git", "remote", "set-url", "origin", sshUrl);
+            runRemote(repoDir, "git", "fetch", "origin", branchRefSpec(branch), "--prune", "--depth=200");
+            run(repoDir, "git", "checkout", "-B", branch, "origin/" + branch);
         } catch (BizException exception) {
             if (isNetworkIssue(exception.getMessage())) {
                 throw new BizException(ErrorCode.BIZ_ERROR,
@@ -65,41 +101,24 @@ public class LocalRepositoryManager {
         return "+refs/heads/" + branch + ":refs/remotes/origin/" + branch;
     }
 
-    private void runWithRepoUrlCandidates(Path workingDirectory, String repoUrl, String token, GitCommandFactory commandFactory) {
-        BizException lastException = null;
-        for (String candidate : repoUrlCandidates(repoUrl, token)) {
-            try {
-                run(workingDirectory, commandFactory.command(candidate));
-                return;
-            } catch (BizException exception) {
-                lastException = exception;
-                if (isNetworkIssue(exception.getMessage())) {
-                    break;
-                }
-            }
-        }
-        if (lastException != null) {
-            throw lastException;
-        }
-    }
-
-    private List<String> repoUrlCandidates(String repoUrl, String token) {
-        List<String> candidates = new ArrayList<>();
-        candidates.add(repoUrl);
-        String authenticatedUrl = authUrl(repoUrl, token);
-        if (!authenticatedUrl.equals(repoUrl)) {
-            candidates.add(authenticatedUrl);
-        }
-        return candidates;
-    }
-
     public GitCommandResult run(Path workingDirectory, String... command) {
+        return runInternal(workingDirectory, false, command);
+    }
+
+    private GitCommandResult runRemote(Path workingDirectory, String... command) {
+        return runInternal(workingDirectory, true, command);
+    }
+
+    private GitCommandResult runInternal(Path workingDirectory, boolean remote, String... command) {
         Path stdoutPath = null;
         Path stderrPath = null;
         try {
             stdoutPath = Files.createTempFile("code-review-git-stdout-", ".log");
             stderrPath = Files.createTempFile("code-review-git-stderr-", ".log");
             ProcessBuilder builder = new ProcessBuilder(command);
+            if (remote) {
+                builder.environment().putAll(credentialManager.gitEnvironment());
+            }
             builder.directory(workingDirectory.toFile());
             builder.redirectOutput(stdoutPath.toFile());
             builder.redirectError(stderrPath.toFile());
@@ -123,18 +142,6 @@ public class LocalRepositoryManager {
         } finally {
             deleteQuietly(stdoutPath);
             deleteQuietly(stderrPath);
-        }
-    }
-
-    private String authUrl(String repoUrl, String token) {
-        if (!StringUtils.hasText(token) || !repoUrl.startsWith("https://")) {
-            return repoUrl;
-        }
-        try {
-            String encodedToken = URLEncoder.encode(token, StandardCharsets.UTF_8.name());
-            return "https://oauth2:" + encodedToken + "@" + repoUrl.substring("https://".length());
-        } catch (Exception exception) {
-            throw new BizException(ErrorCode.BIZ_ERROR, "encode repository token failed");
         }
     }
 
@@ -192,8 +199,4 @@ public class LocalRepositoryManager {
         return String.join(" ", safe);
     }
 
-    private interface GitCommandFactory {
-
-        String[] command(String repoUrl);
-    }
 }

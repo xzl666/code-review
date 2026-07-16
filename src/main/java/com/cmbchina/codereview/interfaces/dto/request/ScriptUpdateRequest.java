@@ -24,7 +24,7 @@ public class ScriptUpdateRequest {
     private String ruleType = "CUSTOM";
 
     @NotBlank(message = "不能为空")
-    private String severity = "MAJOR";
+    private String severity = "HIGH";
 
     private String description;
 

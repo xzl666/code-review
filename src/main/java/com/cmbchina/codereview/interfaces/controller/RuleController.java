@@ -1,15 +1,12 @@
 package com.cmbchina.codereview.interfaces.controller;
 
-import com.cmbchina.codereview.application.service.AiDraftGenerationService;
 import com.cmbchina.codereview.application.service.RuleAppService;
 import com.cmbchina.codereview.common.response.ApiResponse;
 import com.cmbchina.codereview.common.response.PageResponse;
-import com.cmbchina.codereview.interfaces.dto.request.AiGenerateScriptRequest;
 import com.cmbchina.codereview.interfaces.dto.request.IdRequest;
 import com.cmbchina.codereview.interfaces.dto.request.RuleCreateRequest;
 import com.cmbchina.codereview.interfaces.dto.request.RulePageRequest;
 import com.cmbchina.codereview.interfaces.dto.request.RuleUpdateRequest;
-import com.cmbchina.codereview.interfaces.dto.response.AiGeneratedScriptResponse;
 import com.cmbchina.codereview.interfaces.dto.response.IdResponse;
 import com.cmbchina.codereview.interfaces.dto.response.RuleResponse;
 import javax.validation.Valid;
@@ -24,12 +21,8 @@ public class RuleController {
 
     private final RuleAppService ruleAppService;
 
-    private final AiDraftGenerationService aiDraftGenerationService;
-
-    public RuleController(RuleAppService ruleAppService,
-                          AiDraftGenerationService aiDraftGenerationService) {
+    public RuleController(RuleAppService ruleAppService) {
         this.ruleAppService = ruleAppService;
-        this.aiDraftGenerationService = aiDraftGenerationService;
     }
 
     @PostMapping("/create")
@@ -71,8 +64,4 @@ public class RuleController {
         return ApiResponse.success();
     }
 
-    @PostMapping("/generate-script")
-    public ApiResponse<AiGeneratedScriptResponse> generateScript(@RequestBody AiGenerateScriptRequest request) {
-        return ApiResponse.success(aiDraftGenerationService.generateScript(request));
-    }
 }

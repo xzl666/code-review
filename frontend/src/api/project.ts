@@ -1,15 +1,15 @@
-import { post, type PageResponse } from './http'
+import { post, postForm, type PageResponse } from './http'
+import type { SystemUser } from './user'
 
 export interface Project {
   id: number
   projectName: string
-  projectCode: string
   projectType: string
   repoUrl: string
-  useDefaultToken: number
   defaultBranch: string
   ownerName?: string
-  reviewDays: number
+  ownerUserIds?: string[]
+  owners?: SystemUser[]
   scheduleCron?: string
   scheduleEnabled?: number
   notifyEnabled?: number
@@ -22,14 +22,11 @@ export interface Project {
 export interface ProjectForm {
   id?: number
   projectName: string
-  projectCode: string
   projectType: string
   repoUrl: string
-  projectToken?: string
-  useDefaultToken: number
   defaultBranch: string
   ownerName?: string
-  reviewDays: number
+  ownerUserIds?: string[]
   scheduleCron?: string
   scheduleEnabled?: number
   notifyEnabled?: number
@@ -45,6 +42,21 @@ export interface ProjectPageQuery {
   status?: number
   pageNo: number
   pageSize: number
+}
+
+export interface ProjectCommit {
+  hash: string
+  shortHash: string
+  subject: string
+  author: string
+  commitTime: string
+  parentHashes: string[]
+}
+
+export interface ImportProjectResult {
+  successCount: number
+  failureCount: number
+  failureReasons: string[]
 }
 
 export function pageProjects(query: ProjectPageQuery) {
@@ -75,9 +87,17 @@ export function testRepoConnection(data: {
   projectId?: number
   repoUrl?: string
   branch?: string
-  projectToken?: string
-  useDefaultToken?: number
   timeoutSeconds?: number
 }) {
   return post<{ success: boolean; message: string; branch?: string }>('/api/project/test-repo-connection', data)
+}
+
+export function listProjectCommits(data: { projectId: number; branch?: string; limit?: number }) {
+  return post<ProjectCommit[]>('/api/project/commits', data)
+}
+
+export function importProjects(file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return postForm<ImportProjectResult>('/api/project/import-excel', formData)
 }

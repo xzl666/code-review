@@ -11,19 +11,11 @@ public class RuleResponse {
 
     private String ruleCode;
 
-    private String ruleKind;
-
-    private String ruleType;
-
-    private String severity;
-
-    private String projectType;
-
     private String promptTemplate;
 
-    private Long skillId;
+    private String pathPattern;
 
-    private Long scriptId;
+    private Integer mergeSystemRule;
 
     private Integer status;
 

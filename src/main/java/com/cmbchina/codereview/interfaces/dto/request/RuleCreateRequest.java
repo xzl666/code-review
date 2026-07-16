@@ -13,21 +13,12 @@ public class RuleCreateRequest {
     private String ruleCode;
 
     @NotBlank(message = "不能为空")
-    private String ruleKind;
-
-    @NotBlank(message = "不能为空")
-    private String ruleType;
-
-    @NotBlank(message = "不能为空")
-    private String severity;
-
-    private String projectType = "ALL";
-
     private String promptTemplate;
 
-    private Long skillId;
+    @NotBlank(message = "不能为空")
+    private String pathPattern = "**/*";
 
-    private Long scriptId;
+    private Integer mergeSystemRule = 1;
 
     private Integer sortOrder = 0;
 }

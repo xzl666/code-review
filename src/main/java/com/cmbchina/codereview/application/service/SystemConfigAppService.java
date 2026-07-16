@@ -5,18 +5,21 @@ import com.cmbchina.codereview.common.exception.ErrorCode;
 import com.cmbchina.codereview.common.util.MaskUtils;
 import com.cmbchina.codereview.domain.config.SystemConfig;
 import com.cmbchina.codereview.domain.config.SystemConfigRepository;
-import com.cmbchina.codereview.interfaces.dto.request.DefaultTokenUpdateRequest;
+import com.cmbchina.codereview.infrastructure.git.GiteeSshConfigValidator;
 import com.cmbchina.codereview.interfaces.dto.request.DeepSeekConfigUpdateRequest;
 import com.cmbchina.codereview.interfaces.dto.request.ModelConfigSaveRequest;
 import com.cmbchina.codereview.interfaces.dto.request.ModelConfigValidateRequest;
+import com.cmbchina.codereview.interfaces.dto.request.GiteeSshConfigUpdateRequest;
 import com.cmbchina.codereview.interfaces.dto.response.ConfigValidationResponse;
-import com.cmbchina.codereview.interfaces.dto.response.DefaultTokenResponse;
 import com.cmbchina.codereview.interfaces.dto.response.DeepSeekConfigResponse;
 import com.cmbchina.codereview.interfaces.dto.response.ModelConfigResponse;
+import com.cmbchina.codereview.interfaces.dto.response.GiteeSshConfigResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.security.MessageDigest;
+import java.util.Base64;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,70 +41,103 @@ import org.springframework.web.util.UriUtils;
 @Service
 public class SystemConfigAppService {
 
-    public static final String DEFAULT_GITEE_TOKEN_KEY = "DEFAULT_GITEE_TOKEN";
+    public static final String GITEE_BASE_URL_KEY = "GITEE_BASE_URL";
+    public static final String GITEE_SSH_PRIVATE_KEY = "GITEE_SSH_PRIVATE_KEY";
     public static final String DEEPSEEK_API_KEY = "DEEPSEEK_API_KEY";
     public static final String DEEPSEEK_URL = "DEEPSEEK_URL";
     public static final String DEEPSEEK_MODEL = "DEEPSEEK_MODEL";
+    public static final String PROVIDER_OPENAI_COMPATIBLE = "OPENAI_COMPATIBLE";
+    public static final String PROVIDER_CMB_INTERNAL = "CMB_INTERNAL";
 
     private final SystemConfigRepository systemConfigRepository;
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
+    private final GiteeSshConfigValidator giteeSshConfigValidator;
 
-    @Value("${code-review.git.gitee-token:${CODE_REVIEW_GITEE_TOKEN:}}")
-    private String defaultGiteeTokenFallback;
+    @Value("${code-review.git.gitee-base-url:${CODE_REVIEW_GITEE_BASE_URL:https://gitee.com}}")
+    private String giteeBaseUrlFallback;
+
+    @Value("${code-review.git.gitee-ssh-private-key:${CODE_REVIEW_GITEE_SSH_PRIVATE_KEY:}}")
+    private String giteeSshPrivateKeyFallback;
+
+    @Value("${code-review.model.cmb-internal-base-url:${CMB_INTERNAL_LLM_BASE_URL:http://open-llm.uat.cmbchina.cn/llm}}")
+    private String cmbInternalBaseUrl;
 
     public SystemConfigAppService(SystemConfigRepository systemConfigRepository,
                                   ObjectMapper objectMapper,
-                                  JdbcTemplate jdbcTemplate) {
+                                  JdbcTemplate jdbcTemplate,
+                                  GiteeSshConfigValidator giteeSshConfigValidator) {
         this.systemConfigRepository = systemConfigRepository;
         this.objectMapper = objectMapper;
         this.jdbcTemplate = jdbcTemplate;
+        this.giteeSshConfigValidator = giteeSshConfigValidator;
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public void updateDefaultGiteeToken(DefaultTokenUpdateRequest request) {
-        SystemConfig config = new SystemConfig();
-        config.setConfigKey(DEFAULT_GITEE_TOKEN_KEY);
-        config.setConfigValue(request.getToken());
-        config.setConfigDesc("系统默认 Gitee 访问令牌，项目未配置单独令牌时使用");
-        systemConfigRepository.saveOrUpdate(config);
+    public void updateGiteeSshConfig(GiteeSshConfigUpdateRequest request) {
+        String baseUrl = StringUtils.hasText(request.getBaseUrl()) ? request.getBaseUrl().trim() : "https://gitee.com";
+        String key = StringUtils.hasText(request.getPrivateKey())
+            ? normalizePrivateKey(request.getPrivateKey())
+            : getGiteeSshPrivateKey();
+        if (StringUtils.hasText(request.getPrivateKey())) {
+            if (!key.contains("BEGIN") || !key.contains("PRIVATE KEY")) {
+                throw new BizException(ErrorCode.PARAM_ERROR, "SSH 私钥格式不正确");
+            }
+        }
+        ConfigValidationResponse validation = giteeSshConfigValidator.validate(baseUrl, key, 10);
+        if (!Boolean.TRUE.equals(validation.getSuccess())) {
+            throw new BizException(ErrorCode.BIZ_ERROR, validation.getMessage());
+        }
+        saveConfig(GITEE_BASE_URL_KEY, baseUrl, "Gitee 服务地址，可配置为企业内部 Gitee 地址");
+        if (StringUtils.hasText(request.getPrivateKey())) {
+            saveConfig(GITEE_SSH_PRIVATE_KEY, key, "Gitee 仓库访问 SSH 私钥");
+        }
     }
 
-    public String getDefaultGiteeToken() {
-        SystemConfig config = systemConfigRepository.findByKey(DEFAULT_GITEE_TOKEN_KEY);
-        return defaultIfBlank(defaultGiteeTokenFallback, config == null ? null : config.getConfigValue());
+    public ConfigValidationResponse validateGiteeSshConfig(GiteeSshConfigUpdateRequest request) {
+        GiteeSshConfigUpdateRequest safeRequest = request == null ? new GiteeSshConfigUpdateRequest() : request;
+        String baseUrl = defaultIfBlank(safeRequest.getBaseUrl(), getGiteeBaseUrl());
+        String privateKey = StringUtils.hasText(safeRequest.getPrivateKey())
+            ? normalizePrivateKey(safeRequest.getPrivateKey())
+            : getGiteeSshPrivateKey();
+        return giteeSshConfigValidator.validate(baseUrl, privateKey, 10);
     }
 
-    public DefaultTokenResponse getDefaultGiteeTokenDetail() {
-        String token = getDefaultGiteeToken();
-        DefaultTokenResponse response = new DefaultTokenResponse();
-        response.setConfigured(StringUtils.hasText(token));
-        response.setMaskedToken(StringUtils.hasText(token) ? MaskUtils.maskSecret(token) : null);
+    private String normalizePrivateKey(String privateKey) {
+        return privateKey.replace("\\n", "\n").trim();
+    }
+
+    public String getGiteeBaseUrl() {
+        return defaultIfBlank(getConfigValue(GITEE_BASE_URL_KEY), giteeBaseUrlFallback);
+    }
+
+    public String getGiteeSshPrivateKey() {
+        return defaultIfBlank(getConfigValue(GITEE_SSH_PRIVATE_KEY), giteeSshPrivateKeyFallback);
+    }
+
+    public GiteeSshConfigResponse getGiteeSshConfigDetail() {
+        String privateKey = getGiteeSshPrivateKey();
+        GiteeSshConfigResponse response = new GiteeSshConfigResponse();
+        response.setBaseUrl(getGiteeBaseUrl());
+        response.setPrivateKeyConfigured(StringUtils.hasText(privateKey));
+        response.setKeyFingerprint(StringUtils.hasText(privateKey) ? fingerprint(privateKey) : null);
         return response;
     }
 
-    public ConfigValidationResponse validateDefaultGiteeToken() {
-        String token = getDefaultGiteeToken();
-        if (!StringUtils.hasText(token)) {
-            return failed("Gitee Token 未配置");
-        }
+    private void saveConfig(String key, String value, String description) {
+        SystemConfig config = new SystemConfig();
+        config.setConfigKey(key);
+        config.setConfigValue(value);
+        config.setConfigDesc(description);
+        systemConfigRepository.saveOrUpdate(config);
+    }
+
+    private String fingerprint(String value) {
         try {
-            String url = "https://gitee.com/api/v5/user?access_token="
-                + UriUtils.encodeQueryParam(token, StandardCharsets.UTF_8);
-            ResponseEntity<String> response = restTemplate(10).exchange(
-                url,
-                HttpMethod.GET,
-                HttpEntity.EMPTY,
-                String.class
-            );
-            return result(
-                response.getStatusCode().is2xxSuccessful(),
-                response.getStatusCodeValue(),
-                response.getStatusCode().is2xxSuccessful() ? "Gitee Token 验证通过" : "Gitee Token 验证未通过",
-                truncate(response.getBody())
-            );
-        } catch (Exception exception) {
-            return failed("Gitee Token 验证失败：" + exception.getMessage());
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
+            return "SHA256:" + Base64.getEncoder().withoutPadding().encodeToString(digest).substring(0, 16);
+        } catch (Exception ignored) {
+            return null;
         }
     }
 
@@ -182,16 +218,30 @@ public class SystemConfigAppService {
 
     @Transactional(rollbackFor = Exception.class)
     public void saveModelConfig(ModelConfigSaveRequest request) {
-        String providerType = defaultIfBlank(request.getProviderType(), "OPENAI_COMPATIBLE");
+        String providerType = normalizeProviderType(request.getProviderType());
+        String modelName = request.getModelName();
+        String configName = StringUtils.hasText(request.getConfigName()) ? request.getConfigName().trim()
+            : PROVIDER_CMB_INTERNAL.equals(providerType) && StringUtils.hasText(modelName)
+                ? modelName.trim() + "（内部）" : null;
+        String baseUrl = resolveProviderUrl(providerType, request.getBaseUrl(), modelName);
         int enabled = request.getEnabled() == null ? 0 : request.getEnabled();
+        if (!StringUtils.hasText(configName)) {
+            throw new BizException(ErrorCode.PARAM_ERROR, "配置名称不能为空");
+        }
+        if (!StringUtils.hasText(modelName)) {
+            throw new BizException(ErrorCode.PARAM_ERROR, "模型名称不能为空");
+        }
+        if (request.getId() == null && !StringUtils.hasText(request.getApiKey())) {
+            throw new BizException(ErrorCode.PARAM_ERROR, "API Key 不能为空");
+        }
         if (request.getId() == null) {
             jdbcTemplate.update(
                 "INSERT INTO cr_model_config (config_name, provider_type, base_url, model_name, api_key, enabled, remark) "
                     + "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                request.getConfigName(),
+                configName,
                 providerType,
-                request.getBaseUrl(),
-                request.getModelName(),
+                baseUrl,
+                modelName,
                 request.getApiKey(),
                 enabled,
                 request.getRemark()
@@ -206,10 +256,10 @@ public class SystemConfigAppService {
         jdbcTemplate.update(
             "UPDATE cr_model_config SET config_name = ?, provider_type = ?, base_url = ?, model_name = ?, api_key = ?, enabled = ?, remark = ? "
                 + "WHERE id = ? AND deleted = 0",
-            request.getConfigName(),
+            configName,
             providerType,
-            request.getBaseUrl(),
-            request.getModelName(),
+            baseUrl,
+            modelName,
             apiKey,
             enabled,
             request.getRemark(),
@@ -241,16 +291,26 @@ public class SystemConfigAppService {
         String apiKey = safeRequest.getApiKey();
         String baseUrl = safeRequest.getBaseUrl();
         String modelName = safeRequest.getModelName();
+        String providerType = safeRequest.getProviderType();
         if (safeRequest.getId() != null) {
             ModelConfigResponse existing = ensureModelConfig(safeRequest.getId());
             apiKey = defaultIfBlank(apiKey, apiKeyById(existing.getId()));
             baseUrl = defaultIfBlank(baseUrl, existing.getBaseUrl());
             modelName = defaultIfBlank(modelName, existing.getModelName());
+            providerType = defaultIfBlank(providerType, existing.getProviderType());
         } else {
             ActiveModelConfig active = getActiveModelConfig(null, null, null);
+            ModelConfigResponse activeResponse = activeModelConfig();
             apiKey = defaultIfBlank(apiKey, active.getApiKey());
             baseUrl = defaultIfBlank(baseUrl, active.getBaseUrl());
             modelName = defaultIfBlank(modelName, active.getModelName());
+            providerType = defaultIfBlank(providerType,
+                activeResponse == null ? PROVIDER_OPENAI_COMPATIBLE : activeResponse.getProviderType());
+        }
+        try {
+            baseUrl = resolveProviderUrl(normalizeProviderType(providerType), baseUrl, modelName);
+        } catch (BizException exception) {
+            return failed(exception.getMessage());
         }
         return validateOpenAiCompatibleConfig(apiKey, baseUrl, modelName);
     }
@@ -350,6 +410,34 @@ public class SystemConfigAppService {
             return trimmed + "/chat/completions";
         }
         return trimmed + "/v1/chat/completions";
+    }
+
+    private String normalizeProviderType(String providerType) {
+        String normalized = defaultIfBlank(providerType, PROVIDER_OPENAI_COMPATIBLE).trim().toUpperCase();
+        if (PROVIDER_OPENAI_COMPATIBLE.equals(normalized) || PROVIDER_CMB_INTERNAL.equals(normalized)) {
+            return normalized;
+        }
+        throw new BizException(ErrorCode.PARAM_ERROR, "不支持的模型渠道：" + providerType);
+    }
+
+    private String resolveProviderUrl(String providerType, String baseUrl, String modelName) {
+        if (PROVIDER_CMB_INTERNAL.equals(providerType)) {
+            return buildCmbInternalUrl(modelName);
+        }
+        if (!StringUtils.hasText(baseUrl)) {
+            throw new BizException(ErrorCode.PARAM_ERROR, "Base URL 不能为空");
+        }
+        return baseUrl.trim();
+    }
+
+    String buildCmbInternalUrl(String modelName) {
+        if (!StringUtils.hasText(modelName)) {
+            throw new BizException(ErrorCode.PARAM_ERROR, "模型名称不能为空");
+        }
+        String base = cmbInternalBaseUrl.endsWith("/")
+            ? cmbInternalBaseUrl.substring(0, cmbInternalBaseUrl.length() - 1) : cmbInternalBaseUrl;
+        return base + "/" + UriUtils.encodePathSegment(modelName.trim(), StandardCharsets.UTF_8)
+            + "/v1/chat/completions";
     }
 
     private ConfigValidationResponse failed(String message) {

@@ -4,7 +4,7 @@
       <div class="panel-header">
         <div>
           <h2>系统配置</h2>
-          <p>管理访问令牌和 OpenAI 兼容模型服务配置</p>
+          <p>管理 Gitee SSH 访问和 OpenAI 兼容模型服务配置</p>
         </div>
         <el-button :icon="RefreshCw" @click="loadConfig">刷新</el-button>
       </div>
@@ -12,14 +12,15 @@
       <div class="settings-grid">
         <div class="setting-card">
           <div class="setting-title">
-            <strong>Gitee 默认 Token</strong>
-            <el-tag :type="gitee?.configured ? 'success' : 'info'">{{ gitee?.configured ? '已配置' : '未配置' }}</el-tag>
+            <strong>Gitee SSH 访问</strong>
+            <el-tag :type="gitee?.privateKeyConfigured ? 'success' : 'info'">{{ gitee?.privateKeyConfigured ? '已配置' : '未配置' }}</el-tag>
           </div>
-          <p>{{ gitee?.maskedToken || '优先读取 CODE_REVIEW_GITEE_TOKEN 环境变量' }}</p>
-          <el-input v-model="giteeToken" type="password" show-password placeholder="写入数据库配置的 Gitee Token" />
+          <p>{{ gitee?.keyFingerprint || '也可使用 CODE_REVIEW_GITEE_SSH_PRIVATE_KEY 环境变量' }}</p>
+          <el-input v-model="giteeBaseUrl" placeholder="https://gitee.com" />
+          <el-input v-model="giteePrivateKey" type="textarea" :rows="6" spellcheck="false" placeholder="粘贴 SSH 私钥，留空表示保留已配置私钥" />
           <div class="setting-actions">
-            <el-button type="primary" :loading="savingGitee" @click="saveGiteeToken">保存 Token</el-button>
-            <el-button :loading="validatingGitee" @click="validateGiteeToken">验证配置</el-button>
+            <el-button :loading="validatingGitee" @click="validateGiteeSsh">验证配置</el-button>
+            <el-button type="primary" :loading="savingGitee" @click="saveGiteeSsh">保存 SSH 配置</el-button>
           </div>
         </div>
 
@@ -42,13 +43,15 @@
       <div class="panel-header">
         <div>
           <h2>模型服务配置</h2>
-          <p>可保存多个模型服务，每次仅启用一个配置供 AI 检视和规则生成使用</p>
+          <p>可保存多个 OpenAI 兼容模型服务，每次仅启用一个供 OpenCodeReview 使用</p>
         </div>
       </div>
 
       <el-table :data="modelConfigs" v-loading="loadingModels" border>
         <el-table-column prop="configName" label="配置名称" min-width="160" />
-        <el-table-column prop="providerType" label="类型" width="170" />
+        <el-table-column label="渠道" width="170">
+          <template #default="{ row }">{{ providerText(row.providerType) }}</template>
+        </el-table-column>
         <el-table-column prop="modelName" label="模型" min-width="160" />
         <el-table-column prop="baseUrl" label="Base URL" min-width="260" show-overflow-tooltip />
         <el-table-column label="API Key" width="150">
@@ -74,15 +77,16 @@
 
     <el-dialog v-model="modelDialogVisible" :title="modelForm.id ? '编辑模型配置' : '新增模型配置'" width="640px">
       <el-form label-width="100px">
-        <el-form-item label="配置名称" required>
+        <el-form-item v-if="!isInternalModel" label="配置名称" required>
           <el-input v-model="modelForm.configName" placeholder="例如：DeepSeek、OpenAI、Qwen" />
         </el-form-item>
-        <el-form-item label="服务类型">
+        <el-form-item label="模型渠道">
           <el-select v-model="modelForm.providerType">
-            <el-option label="OpenAI Compatible" value="OPENAI_COMPATIBLE" />
+            <el-option label="招行内部大模型" value="CMB_INTERNAL" />
+            <el-option label="OpenAI 兼容服务" value="OPENAI_COMPATIBLE" />
           </el-select>
         </el-form-item>
-        <el-form-item label="Base URL" required>
+        <el-form-item v-if="!isInternalModel" label="Base URL" required>
           <el-input v-model="modelForm.baseUrl" placeholder="https://api.example.com 或完整 /v1/chat/completions 地址" />
         </el-form-item>
         <el-form-item label="模型名称" required>
@@ -114,20 +118,21 @@ import { Plus, RefreshCw } from 'lucide-vue-next'
 import {
   deleteModelConfig,
   enableModelConfig,
-  getDefaultGiteeToken,
+  getGiteeSshConfig,
   listModelConfigs,
   saveModelConfig,
-  updateDefaultGiteeToken,
-  validateDefaultGiteeToken,
+  updateGiteeSshConfig,
+  validateGiteeSshConfig as validateGiteeSshConfigApi,
   validateModelConfig,
   type ConfigValidationResult,
   type ModelConfig,
   type ModelConfigForm,
-  type TokenDetail
+  type GiteeSshConfig
 } from '@/api/systemConfig'
 
-const gitee = ref<TokenDetail>()
-const giteeToken = ref('')
+const gitee = ref<GiteeSshConfig>()
+const giteeBaseUrl = ref('https://gitee.com')
+const giteePrivateKey = ref('')
 const modelConfigs = ref<ModelConfig[]>([])
 const loadingModels = ref(false)
 const savingGitee = ref(false)
@@ -140,7 +145,7 @@ const validatingDraft = ref(false)
 
 const modelForm = reactive<ModelConfigForm>({
   configName: '',
-  providerType: 'OPENAI_COMPATIBLE',
+  providerType: 'CMB_INTERNAL',
   baseUrl: '',
   modelName: '',
   apiKey: '',
@@ -149,6 +154,7 @@ const modelForm = reactive<ModelConfigForm>({
 })
 
 const activeModel = computed(() => modelConfigs.value.find(item => item.enabled === 1))
+const isInternalModel = computed(() => modelForm.providerType === 'CMB_INTERNAL')
 const modelEnabled = computed({
   get: () => modelForm.enabled === 1,
   set: value => {
@@ -157,8 +163,9 @@ const modelEnabled = computed({
 })
 
 async function loadConfig() {
-  const [giteeConfig] = await Promise.all([getDefaultGiteeToken(), loadModelConfigs()])
+  const [giteeConfig] = await Promise.all([getGiteeSshConfig(), loadModelConfigs()])
   gitee.value = giteeConfig
+  giteeBaseUrl.value = giteeConfig.baseUrl || 'https://gitee.com'
 }
 
 async function loadModelConfigs() {
@@ -170,26 +177,33 @@ async function loadModelConfigs() {
   }
 }
 
-async function saveGiteeToken() {
-  if (!giteeToken.value) {
-    ElMessage.warning('请输入 Gitee Token')
+async function saveGiteeSsh() {
+  if (!giteeBaseUrl.value.trim()) {
+    ElMessage.warning('请输入 Gitee 地址')
     return
   }
   savingGitee.value = true
   try {
-    await updateDefaultGiteeToken(giteeToken.value)
-    giteeToken.value = ''
-    ElMessage.success('Gitee Token 已保存')
+    await updateGiteeSshConfig({ baseUrl: giteeBaseUrl.value, privateKey: giteePrivateKey.value || undefined })
+    giteePrivateKey.value = ''
+    ElMessage.success('Gitee SSH 配置已保存')
     await loadConfig()
   } finally {
     savingGitee.value = false
   }
 }
 
-async function validateGiteeToken() {
+async function validateGiteeSsh() {
+  if (!giteeBaseUrl.value.trim()) {
+    ElMessage.warning('请输入 Gitee 地址')
+    return
+  }
   validatingGitee.value = true
   try {
-    showValidationMessage(await validateDefaultGiteeToken())
+    showValidationMessage(await validateGiteeSshConfigApi({
+      baseUrl: giteeBaseUrl.value,
+      privateKey: giteePrivateKey.value || undefined
+    }))
   } finally {
     validatingGitee.value = false
   }
@@ -199,7 +213,7 @@ function openCreateModel() {
   Object.assign(modelForm, {
     id: undefined,
     configName: '',
-    providerType: 'OPENAI_COMPATIBLE',
+    providerType: 'CMB_INTERNAL',
     baseUrl: '',
     modelName: '',
     apiKey: '',
@@ -224,7 +238,8 @@ function openEditModel(row: ModelConfig) {
 }
 
 async function saveModel() {
-  if (!modelForm.configName || !modelForm.baseUrl || !modelForm.modelName || (!modelForm.id && !modelForm.apiKey)) {
+  const missingMetadata = !isInternalModel.value && (!modelForm.configName || !modelForm.baseUrl)
+  if (missingMetadata || !modelForm.modelName || (!modelForm.id && !modelForm.apiKey)) {
     ElMessage.warning('请填写完整模型配置')
     return
   }
@@ -237,6 +252,10 @@ async function saveModel() {
   } finally {
     savingModel.value = false
   }
+}
+
+function providerText(providerType: string) {
+  return providerType === 'CMB_INTERNAL' ? '招行内部大模型' : 'OpenAI 兼容服务'
 }
 
 async function enableModel(row: ModelConfig) {

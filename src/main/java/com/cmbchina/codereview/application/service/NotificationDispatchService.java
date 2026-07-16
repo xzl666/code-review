@@ -132,6 +132,7 @@ public class NotificationDispatchService {
     @Scheduled(fixedDelay = 60000)
     public void retryFailedDeliveries() {
         List<NotifyDeliveryLogEntity> logs = notifyDeliveryLogMapper.selectList(new LambdaQueryWrapper<NotifyDeliveryLogEntity>()
+            .eq(NotifyDeliveryLogEntity::getChannelType, WEBHOOK)
             .eq(NotifyDeliveryLogEntity::getStatus, STATUS_FAILED)
             .lt(NotifyDeliveryLogEntity::getRetryCount, MAX_RETRY_COUNT)
             .le(NotifyDeliveryLogEntity::getNextRetryTime, LocalDateTime.now())
@@ -226,17 +227,18 @@ public class NotificationDispatchService {
         variables.put("taskId", task.getId());
         variables.put("taskNo", task.getTaskNo());
         variables.put("projectName", task.getProjectName());
-        variables.put("projectCode", project == null ? "" : project.getProjectCode());
         variables.put("ownerName", project == null ? "" : project.getOwnerName());
         variables.put("status", task.getStatus());
+        variables.put("reviewBranch", task.getReviewBranch());
+        variables.put("reviewStartTime", task.getReviewStartTime());
+        variables.put("reviewEndTime", task.getReviewEndTime());
         variables.put("issueCount", task.getIssueCount());
         variables.put("activeIssueCount", report == null ? task.getIssueCount() : report.getActiveIssueCount());
         variables.put("ignoredIssueCount", report == null ? 0 : report.getIgnoredIssueCount());
-        variables.put("blockerCount", task.getBlockerCount());
         variables.put("criticalCount", task.getCriticalCount());
-        variables.put("majorCount", task.getMajorCount());
-        variables.put("minorCount", task.getMinorCount());
-        variables.put("infoCount", task.getInfoCount());
+        variables.put("highCount", task.getHighCount());
+        variables.put("mediumCount", task.getMediumCount());
+        variables.put("lowCount", task.getLowCount());
         variables.put("errorMessage", task.getErrorMessage());
         variables.put("reportTitle", report == null ? "" : report.getReportTitle());
         variables.put("reportHtml", report == null ? "" : report.getReportContent());

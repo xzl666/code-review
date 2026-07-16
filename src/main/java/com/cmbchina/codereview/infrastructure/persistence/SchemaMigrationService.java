@@ -15,6 +15,10 @@ public class SchemaMigrationService {
 
     @PostConstruct
     public void migrate() {
+        createTableIfMissing("cr_system_user",
+            "CREATE TABLE IF NOT EXISTS cr_system_user (id BIGINT NOT NULL AUTO_INCREMENT,user_name VARCHAR(64) NOT NULL,user_id VARCHAR(64) NOT NULL,employee_id VARCHAR(32) NOT NULL,status TINYINT NOT NULL DEFAULT 1,create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,deleted TINYINT NOT NULL DEFAULT 0,PRIMARY KEY (id),UNIQUE KEY uk_user_id (user_id),UNIQUE KEY uk_employee_id (employee_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        createTableIfMissing("cr_project_owner",
+            "CREATE TABLE IF NOT EXISTS cr_project_owner (id BIGINT NOT NULL AUTO_INCREMENT,project_id BIGINT NOT NULL,user_id VARCHAR(64) NOT NULL,create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY (id),UNIQUE KEY uk_project_user (project_id,user_id),KEY idx_user_id (user_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         createTableIfMissing("cr_model_config",
             "CREATE TABLE IF NOT EXISTS cr_model_config ("
                 + "id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'primary key',"
@@ -86,6 +90,50 @@ public class SchemaMigrationService {
             "ALTER TABLE cr_project ADD COLUMN notify_extra_params TEXT COMMENT 'project notify extra params json' AFTER notify_webhook_url");
         addColumnIfMissing("cr_review_task", "skipped_commit_count",
             "ALTER TABLE cr_review_task ADD COLUMN skipped_commit_count INT NOT NULL DEFAULT 0 COMMENT 'skipped commit count' AFTER ai_call_count");
+        addColumnIfMissing("cr_review_task", "ai_success_count",
+            "ALTER TABLE cr_review_task ADD COLUMN ai_success_count INT NOT NULL DEFAULT 0 COMMENT 'successful LLM calls' AFTER ai_call_count");
+        addColumnIfMissing("cr_review_task", "ai_failure_count",
+            "ALTER TABLE cr_review_task ADD COLUMN ai_failure_count INT NOT NULL DEFAULT 0 COMMENT 'failed LLM calls' AFTER ai_success_count");
+        addColumnIfMissing("cr_review_task", "input_token_count",
+            "ALTER TABLE cr_review_task ADD COLUMN input_token_count BIGINT NOT NULL DEFAULT 0 COMMENT 'input tokens' AFTER ai_failure_count");
+        addColumnIfMissing("cr_review_task", "output_token_count",
+            "ALTER TABLE cr_review_task ADD COLUMN output_token_count BIGINT NOT NULL DEFAULT 0 COMMENT 'output tokens' AFTER input_token_count");
+        addColumnIfMissing("cr_review_task", "total_token_count",
+            "ALTER TABLE cr_review_task ADD COLUMN total_token_count BIGINT NOT NULL DEFAULT 0 COMMENT 'total tokens' AFTER output_token_count");
+        addColumnIfMissing("cr_review_task", "cache_read_token_count",
+            "ALTER TABLE cr_review_task ADD COLUMN cache_read_token_count BIGINT NOT NULL DEFAULT 0 COMMENT 'cache read tokens' AFTER total_token_count");
+        addColumnIfMissing("cr_review_task", "cache_write_token_count",
+            "ALTER TABLE cr_review_task ADD COLUMN cache_write_token_count BIGINT NOT NULL DEFAULT 0 COMMENT 'cache write tokens' AFTER cache_read_token_count");
+        addColumnIfMissing("cr_review_task", "review_mode",
+            "ALTER TABLE cr_review_task ADD COLUMN review_mode VARCHAR(32) NOT NULL DEFAULT 'RANGE' COMMENT 'OCR review mode' AFTER review_days");
+        addColumnIfMissing("cr_review_task", "base_ref",
+            "ALTER TABLE cr_review_task ADD COLUMN base_ref VARCHAR(255) DEFAULT NULL COMMENT 'range base ref' AFTER review_mode");
+        addColumnIfMissing("cr_review_task", "target_ref",
+            "ALTER TABLE cr_review_task ADD COLUMN target_ref VARCHAR(255) DEFAULT NULL COMMENT 'range target ref' AFTER base_ref");
+        addColumnIfMissing("cr_review_task", "commit_ref",
+            "ALTER TABLE cr_review_task ADD COLUMN commit_ref VARCHAR(255) DEFAULT NULL COMMENT 'single commit ref' AFTER target_ref");
+        addColumnIfMissing("cr_review_task", "scan_path",
+            "ALTER TABLE cr_review_task ADD COLUMN scan_path VARCHAR(2000) DEFAULT NULL COMMENT 'scan paths' AFTER commit_ref");
+        addColumnIfMissing("cr_review_task", "scan_exclude",
+            "ALTER TABLE cr_review_task ADD COLUMN scan_exclude VARCHAR(2000) DEFAULT NULL COMMENT 'scan excludes' AFTER scan_path");
+        addColumnIfMissing("cr_review_task", "scan_no_plan",
+            "ALTER TABLE cr_review_task ADD COLUMN scan_no_plan TINYINT NOT NULL DEFAULT 0 COMMENT 'skip scan plan' AFTER scan_exclude");
+        addColumnIfMissing("cr_review_task", "max_tokens_budget",
+            "ALTER TABLE cr_review_task ADD COLUMN max_tokens_budget BIGINT NOT NULL DEFAULT 500000 COMMENT 'scan token budget' AFTER scan_no_plan");
+        addColumnIfMissing("cr_review_task", "review_background",
+            "ALTER TABLE cr_review_task ADD COLUMN review_background TEXT COMMENT 'review background' AFTER max_tokens_budget");
+        addColumnIfMissing("cr_review_task", "review_start_time",
+            "ALTER TABLE cr_review_task ADD COLUMN review_start_time DATETIME DEFAULT NULL COMMENT 'scheduled review window start' AFTER review_background");
+        addColumnIfMissing("cr_review_task", "review_end_time",
+            "ALTER TABLE cr_review_task ADD COLUMN review_end_time DATETIME DEFAULT NULL COMMENT 'scheduled review window end' AFTER review_start_time");
+        addColumnIfMissing("cr_review_task", "notify_enabled",
+            "ALTER TABLE cr_review_task ADD COLUMN notify_enabled TINYINT NOT NULL DEFAULT 0 COMMENT 'send robot notification' AFTER review_end_time");
+        addColumnIfMissing("cr_review_task", "high_count",
+            "ALTER TABLE cr_review_task ADD COLUMN high_count INT NOT NULL DEFAULT 0 COMMENT 'OCR high severity count' AFTER critical_count");
+        addColumnIfMissing("cr_review_task", "medium_count",
+            "ALTER TABLE cr_review_task ADD COLUMN medium_count INT NOT NULL DEFAULT 0 COMMENT 'OCR medium severity count' AFTER high_count");
+        addColumnIfMissing("cr_review_task", "low_count",
+            "ALTER TABLE cr_review_task ADD COLUMN low_count INT NOT NULL DEFAULT 0 COMMENT 'OCR low severity count' AFTER medium_count");
         addColumnIfMissing("cr_review_task", "skipped_file_count",
             "ALTER TABLE cr_review_task ADD COLUMN skipped_file_count INT NOT NULL DEFAULT 0 COMMENT 'skipped file count' AFTER skipped_commit_count");
         addColumnIfMissing("cr_review_task", "warning_message",
@@ -100,26 +148,181 @@ public class SchemaMigrationService {
             "ALTER TABLE cr_review_issue ADD COLUMN skill_name VARCHAR(128) DEFAULT NULL COMMENT 'matched skill name snapshot' AFTER rule_name");
         addColumnIfMissing("cr_review_issue", "script_name",
             "ALTER TABLE cr_review_issue ADD COLUMN script_name VARCHAR(128) DEFAULT NULL COMMENT 'matched script name snapshot' AFTER skill_name");
+        addColumnIfMissing("cr_review_issue", "assignee_user_id",
+            "ALTER TABLE cr_review_issue ADD COLUMN assignee_user_id VARCHAR(64) DEFAULT NULL COMMENT 'issue assignee user id' AFTER project_id");
+        addColumnIfMissing("cr_review_issue", "assignee_name",
+            "ALTER TABLE cr_review_issue ADD COLUMN assignee_name VARCHAR(64) DEFAULT NULL COMMENT 'issue assignee name' AFTER assignee_user_id");
+        addColumnIfMissing("cr_review_issue", "assignee_employee_id",
+            "ALTER TABLE cr_review_issue ADD COLUMN assignee_employee_id VARCHAR(32) DEFAULT NULL COMMENT 'issue assignee employee id' AFTER assignee_name");
+        addColumnIfMissing("cr_review_issue", "commit_author",
+            "ALTER TABLE cr_review_issue ADD COLUMN commit_author VARCHAR(128) DEFAULT NULL COMMENT 'git commit author' AFTER assignee_employee_id");
+        addColumnIfMissing("cr_review_rule", "path_pattern",
+            "ALTER TABLE cr_review_rule ADD COLUMN path_pattern VARCHAR(512) NOT NULL DEFAULT '**/*' COMMENT 'OpenCodeReview path pattern' AFTER prompt_template");
+        addColumnIfMissing("cr_review_rule", "merge_system_rule",
+            "ALTER TABLE cr_review_rule ADD COLUMN merge_system_rule TINYINT NOT NULL DEFAULT 1 COMMENT 'merge OpenCodeReview system rule' AFTER path_pattern");
+        addUniqueIndexIfMissing("cr_review_task", "uk_schedule_window",
+            "ALTER TABLE cr_review_task ADD UNIQUE KEY uk_schedule_window (project_id, trigger_type, review_start_time, review_end_time)");
+        addUniqueIndexIfMissing("cr_review_issue", "idx_assignee_user_id",
+            "ALTER TABLE cr_review_issue ADD KEY idx_assignee_user_id (assignee_user_id)");
 
-        addColumnIfMissing("cr_ai_skill", "project_type",
-            "ALTER TABLE cr_ai_skill ADD COLUMN project_type VARCHAR(32) NOT NULL DEFAULT 'ALL' COMMENT 'applicable project type' AFTER version");
-        addColumnIfMissing("cr_ai_skill", "rule_matching_enabled",
-            "ALTER TABLE cr_ai_skill ADD COLUMN rule_matching_enabled TINYINT NOT NULL DEFAULT 0 COMMENT 'rule matching enabled' AFTER project_type");
-        addColumnIfMissing("cr_ai_skill", "match_rules",
-            "ALTER TABLE cr_ai_skill ADD COLUMN match_rules TEXT COMMENT 'skill match rules' AFTER rule_matching_enabled");
-        addColumnIfMissing("cr_ai_skill", "review_guidelines",
-            "ALTER TABLE cr_ai_skill ADD COLUMN review_guidelines MEDIUMTEXT COMMENT 'skill review guidelines' AFTER match_rules");
-        deleteLegacyAiSkillsWithoutGuidelines();
-        dropIndexIfExists("cr_ai_skill", "idx_function_name");
-        dropColumnIfExists("cr_ai_skill", "function_name");
-        dropColumnIfExists("cr_ai_skill", "function_description");
-        dropColumnIfExists("cr_ai_skill", "parameters_schema");
-        normalizeScriptRuleSchema();
+        dropIndexIfExists("cr_project", "idx_project_code");
+        dropColumnIfExists("cr_project", "project_code");
 
+        seedSystemUsers();
+        normalizeOcrSeverities();
+        clearLegacyReviewResultsOnce();
         backfillReviewIssueSourceNames();
+        normalizeOpenCodeReviewRules();
         seedModelConfig();
-        seedDefaultAiSkills();
-        seedDefaultPythonScriptRules();
+        seedDefaultOpenCodeReviewRules();
+    }
+
+    private void clearLegacyReviewResultsOnce() {
+        if (!tableExists("cr_system_config") || !tableExists("cr_review_issue")
+            || !tableExists("cr_review_report") || !tableExists("cr_review_task")) {
+            return;
+        }
+        String marker = "LEGACY_REVIEW_RESULTS_CLEARED_20260716_V2";
+        Integer count = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM cr_system_config WHERE config_key = ? AND deleted = 0", Integer.class, marker);
+        if (count != null && count > 0) {
+            return;
+        }
+        jdbcTemplate.update("DELETE FROM cr_review_report");
+        jdbcTemplate.update("DELETE FROM cr_review_issue");
+        jdbcTemplate.update("UPDATE cr_review_task SET issue_count = 0, critical_count = 0, high_count = 0, medium_count = 0, low_count = 0");
+        for (String legacyColumn : new String[] {"blocker_count", "major_count", "minor_count", "info_count"}) {
+            if (columnExists("cr_review_task", legacyColumn)) {
+                jdbcTemplate.update("UPDATE cr_review_task SET " + legacyColumn + " = 0");
+            }
+        }
+        jdbcTemplate.update(
+            "INSERT INTO cr_system_config (config_key, config_value, config_desc) VALUES (?, ?, ?) "
+                + "ON DUPLICATE KEY UPDATE config_value=VALUES(config_value),config_desc=VALUES(config_desc),deleted=0",
+            marker, "1", "Legacy review issues and cached reports cleared after OCR report migration");
+    }
+
+    private void seedSystemUsers() {
+        Object[][] users = {
+            {"管理员","00000000000000000000000000000001","ADMIN"},
+            {"苏宇","48DE319DD62C759A0C5ACDE0CAE0CF69","80320234"},{"李继宏","2A612E9FCDEAEB73BE6691586151355D","80322994"},
+            {"杨岳涛","8AB93426A2AE3DBDF83655B29DD34496","80323345"},{"谢习田","DB74EE10A85103C89E1BD8A7D063ED71","80325591"},
+            {"王仁传","C37242491BE2BC25913794EA41A672AE","80326302"},{"谢飞","70485B212AA49BE4973273834E57F00D","80371040"},
+            {"徐梓琅","FCD122540D98DF1D1D8D449F3CD132B6","80397201"},{"聂源","C4E18C29BE8F340585BB60A6492FA77D","80400072"},
+            {"隆兴","BF86F9E1E09115EE13598D0D80472499","80404244"},{"全爱平","6CCC26701288956DEB041F1634BB586E","80404295"},
+            {"李均","7DF54B8EC072468A56F367182002CC28","IT011576"},{"钟亮","5B167DDCEA0C83F153DBCA099EEF3A03","80273204"},
+            {"安奎霖","57B2BFF8AF719297CF02E10946A181C5","01239699"},{"刘凯","44568C4C354BB15F2A296539771B8368","80323467"},
+            {"赵曦","8E29A94510AA2E97FD35182FC0A69CF0","80324381"},{"卢英","AE2E213EB06B6857C5BB48BCBE7E1732","80326840"},
+            {"张佳琪","29D06AF664EE5A0568AEE8447729AB80","80380034"},{"周蓉晶","865F403F82FDFEF1B84AE5ABF27D7927","80404363"},
+            {"马姜","F687442E162253F70F8FF0C5B78EAF1E","80404403"},{"熊能","55CDE5BCBCF3431B552FD527642347C8","IT011573"},
+            {"王秋林","F61BBB0FC047F04A05338E98057E7597","IT011710"},{"何国庆","4A337A0961A5E95AD3EDD6A7CBED3E41","IT011826"}
+        };
+        for (Object[] user : users) {
+            jdbcTemplate.update("INSERT INTO cr_system_user (user_name,user_id,employee_id) VALUES (?,?,?) ON DUPLICATE KEY UPDATE user_name=VALUES(user_name),employee_id=VALUES(employee_id),status=1,deleted=0", user);
+        }
+    }
+
+    private void normalizeOcrSeverities() {
+        if (tableExists("cr_review_issue")) {
+            jdbcTemplate.update("UPDATE cr_review_issue SET severity = CASE severity "
+                + "WHEN 'BLOCKER' THEN 'CRITICAL' WHEN 'MAJOR' THEN 'HIGH' "
+                + "WHEN 'MINOR' THEN 'MEDIUM' WHEN 'INFO' THEN 'LOW' ELSE UPPER(severity) END");
+        }
+        if (tableExists("cr_review_rule")) {
+            jdbcTemplate.update("UPDATE cr_review_rule SET severity = CASE severity "
+                + "WHEN 'BLOCKER' THEN 'CRITICAL' WHEN 'MAJOR' THEN 'HIGH' "
+                + "WHEN 'MINOR' THEN 'MEDIUM' WHEN 'INFO' THEN 'LOW' ELSE UPPER(severity) END");
+        }
+        if (columnExists("cr_review_task", "blocker_count") && columnExists("cr_review_task", "major_count")) {
+            jdbcTemplate.update("UPDATE cr_review_task SET critical_count = critical_count + blocker_count, "
+                + "high_count = major_count, medium_count = minor_count, low_count = info_count, blocker_count = 0");
+        }
+    }
+
+    private void addUniqueIndexIfMissing(String tableName, String indexName, String ddl) {
+        if (!tableExists(tableName)) {
+            return;
+        }
+        Integer count = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?",
+            Integer.class, tableName, indexName);
+        if (count == null || count == 0) {
+            jdbcTemplate.execute(ddl);
+        }
+    }
+
+    private void normalizeOpenCodeReviewRules() {
+        if (!tableExists("cr_review_rule")) {
+            return;
+        }
+        if (tableExists("cr_ai_skill") && columnExists("cr_ai_skill", "review_guidelines")) {
+            jdbcTemplate.update(
+                "UPDATE cr_review_rule r LEFT JOIN cr_ai_skill s ON r.skill_id = s.id "
+                    + "SET r.prompt_template = COALESCE(NULLIF(s.review_guidelines, ''), NULLIF(r.prompt_template, ''), '检查真实代码缺陷并给出修复建议'), "
+                    + "r.path_pattern = CASE r.project_type "
+                    + "WHEN 'BACKEND' THEN '**/*.{java,xml,properties,yml,yaml}' "
+                    + "WHEN 'FRONTEND' THEN '**/*.{js,jsx,ts,tsx,vue,css,scss}' ELSE '**/*' END, "
+                    + "r.merge_system_rule = 1, r.rule_kind = 'OCR', r.skill_id = NULL, r.script_id = NULL "
+                    + "WHERE r.deleted = 0 AND r.rule_kind <> 'OCR'"
+            );
+            jdbcTemplate.update("DELETE FROM cr_ai_skill");
+        } else {
+            jdbcTemplate.update(
+                "UPDATE cr_review_rule SET rule_kind = 'OCR', path_pattern = COALESCE(NULLIF(path_pattern, ''), '**/*'), "
+                    + "merge_system_rule = 1, skill_id = NULL, script_id = NULL WHERE deleted = 0 AND rule_kind <> 'OCR'"
+            );
+        }
+        if (tableExists("cr_script_rule")) {
+            jdbcTemplate.update("DELETE FROM cr_script_rule");
+        }
+        jdbcTemplate.update(
+            "UPDATE cr_review_rule SET rule_name = '前端 Web 默认检视规则', rule_code = 'DEFAULT_FRONTEND_WEB_OCR' "
+                + "WHERE rule_code = 'DEFAULT_FRONTEND_REACT_WEB_AI_REVIEW' AND deleted = 0"
+        );
+        jdbcTemplate.update(
+            "UPDATE cr_review_rule SET rule_name = '后端 Java 默认检视规则', rule_code = 'DEFAULT_BACKEND_JAVA_OCR' "
+                + "WHERE rule_code = 'DEFAULT_BACKEND_JAVA_WEB_AI_REVIEW' AND deleted = 0"
+        );
+    }
+
+    private void seedDefaultOpenCodeReviewRules() {
+        Integer existing = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM cr_review_rule WHERE deleted = 0 AND rule_kind = 'OCR'",
+            Integer.class
+        );
+        if (existing != null && existing > 0) {
+            return;
+        }
+        seedOpenCodeReviewRule(
+            "后端 Java 默认检视规则",
+            "DEFAULT_BACKEND_JAVA_OCR",
+            "**/*.{java,xml,properties,yml,yaml}",
+            "重点检查空指针、事务失效、SQL 注入、敏感信息泄露、资源泄漏、并发一致性、鉴权与参数校验问题。",
+            10
+        );
+        seedOpenCodeReviewRule(
+            "前端 Web 默认检视规则",
+            "DEFAULT_FRONTEND_WEB_OCR",
+            "**/*.{js,jsx,ts,tsx,vue,css,scss}",
+            "重点检查状态竞态、Hooks 依赖、XSS、权限绕过、异常态遗漏、资源清理和明显性能问题。",
+            20
+        );
+    }
+
+    private void seedOpenCodeReviewRule(String name, String code, String path, String rule, int sortOrder) {
+        if (ruleExists(code)) {
+            return;
+        }
+        jdbcTemplate.update(
+            "INSERT INTO cr_review_rule "
+                + "(rule_name, rule_code, rule_kind, rule_type, severity, project_type, prompt_template, path_pattern, merge_system_rule, status, sort_order) "
+                + "VALUES (?, ?, 'OCR', 'OTHER', 'HIGH', 'ALL', ?, ?, 1, 1, ?)",
+            name,
+            code,
+            rule,
+            path,
+            sortOrder
+        );
     }
 
     private void normalizeScriptRuleSchema() {
@@ -137,7 +340,7 @@ public class SchemaMigrationService {
                 + "script_code VARCHAR(64) NOT NULL COMMENT 'script rule code',"
                 + "project_type VARCHAR(32) NOT NULL DEFAULT 'ALL' COMMENT 'applicable project type',"
                 + "rule_type VARCHAR(32) NOT NULL DEFAULT 'CUSTOM' COMMENT 'issue type',"
-                + "severity VARCHAR(32) NOT NULL DEFAULT 'MAJOR' COMMENT 'default severity',"
+                + "severity VARCHAR(32) NOT NULL DEFAULT 'HIGH' COMMENT 'default severity',"
                 + "description VARCHAR(512) DEFAULT NULL COMMENT 'rule description',"
                 + "script_content MEDIUMTEXT NOT NULL COMMENT 'python script content',"
                 + "timeout_seconds INT NOT NULL DEFAULT 30 COMMENT 'timeout seconds',"
@@ -324,7 +527,7 @@ public class SchemaMigrationService {
         jdbcTemplate.update(
             "INSERT INTO cr_script_rule "
                 + "(script_name, script_code, project_type, rule_type, severity, description, script_content, timeout_seconds, status, sort_order) "
-                + "VALUES (?, ?, 'BACKEND', 'NAMING', 'MINOR', ?, ?, 20, 1, 10)",
+                + "VALUES (?, ?, 'BACKEND', 'NAMING', 'MEDIUM', ?, ?, 20, 1, 10)",
             "后端 Java 命名规范检查",
             "DEFAULT_BACKEND_JAVA_NAMING",
             "检查 Java diff 新增行中的类名、方法名、变量名、常量名和包名命名规范。",
@@ -373,7 +576,7 @@ public class SchemaMigrationService {
         }
         if (ruleExists(code)) {
             jdbcTemplate.update(
-                "UPDATE cr_review_rule SET rule_name = ?, rule_type = 'CUSTOM', severity = 'MAJOR', project_type = ?, "
+                "UPDATE cr_review_rule SET rule_name = ?, rule_type = 'CUSTOM', severity = 'HIGH', project_type = ?, "
                     + "prompt_template = ?, skill_id = ?, status = 1, sort_order = ? WHERE rule_code = ? AND deleted = 0",
                 name,
                 projectType,
@@ -386,7 +589,7 @@ public class SchemaMigrationService {
         }
         jdbcTemplate.update(
             "INSERT INTO cr_review_rule (rule_name, rule_code, rule_kind, rule_type, severity, project_type, prompt_template, skill_id, status, sort_order) "
-                + "VALUES (?, ?, 'AI', 'CUSTOM', 'MAJOR', ?, ?, ?, 1, ?)",
+                + "VALUES (?, ?, 'AI', 'CUSTOM', 'HIGH', ?, ?, ?, 1, ?)",
             name,
             code,
             projectType,
@@ -447,7 +650,7 @@ public class SchemaMigrationService {
             "",
             "def add(file_path, line, summary, detail, suggestion, snippet):",
             "    issues.append({",
-            "        'severity': 'MINOR',",
+            "        'severity': 'MEDIUM',",
             "        'issueType': 'NAMING',",
             "        'filePath': file_path,",
             "        'startLine': line,",

@@ -1,8 +1,9 @@
 import { post } from './http'
 
-export interface TokenDetail {
-  configured: boolean
-  maskedToken?: string
+export interface GiteeSshConfig {
+  baseUrl: string
+  privateKeyConfigured: boolean
+  keyFingerprint?: string
 }
 
 export interface DeepSeekConfig {
@@ -44,16 +45,16 @@ export interface ConfigValidationResult {
   responseBody?: string
 }
 
-export function getDefaultGiteeToken() {
-  return post<TokenDetail>('/api/system-config/default-gitee-token/detail')
+export function getGiteeSshConfig() {
+  return post<GiteeSshConfig>('/api/system-config/gitee-ssh/detail')
 }
 
-export function updateDefaultGiteeToken(token: string) {
-  return post<void>('/api/system-config/default-gitee-token/update', { token })
+export function updateGiteeSshConfig(data: { baseUrl: string; privateKey?: string }) {
+  return post<void>('/api/system-config/gitee-ssh/update', data)
 }
 
-export function validateDefaultGiteeToken() {
-  return post<ConfigValidationResult>('/api/system-config/default-gitee-token/validate')
+export function validateGiteeSshConfig(data: { baseUrl: string; privateKey?: string }) {
+  return post<ConfigValidationResult>('/api/system-config/gitee-ssh/validate', data)
 }
 
 export function getDeepSeekConfig() {

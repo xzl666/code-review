@@ -172,7 +172,7 @@ public class ScriptRuleAppService {
     }
 
     private String normalizeSeverity(String severity) {
-        String upper = defaultIfBlank(severity, Severity.MAJOR.name()).toUpperCase();
+        String upper = defaultIfBlank(severity, Severity.HIGH.name()).toUpperCase();
         try {
             Severity.valueOf(upper);
             return upper;

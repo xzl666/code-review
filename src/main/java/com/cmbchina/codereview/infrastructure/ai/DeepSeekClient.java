@@ -43,7 +43,7 @@ public class DeepSeekClient {
         + "        \"type\": \"object\",\n"
         + "        \"properties\": {\n"
         + "          \"issueType\": { \"type\": \"string\" },\n"
-        + "          \"severity\": { \"type\": \"string\", \"enum\": [\"BLOCKER\", \"CRITICAL\", \"MAJOR\", \"MINOR\", \"INFO\"] },\n"
+        + "          \"severity\": { \"type\": \"string\", \"enum\": [\"CRITICAL\", \"HIGH\", \"MEDIUM\", \"LOW\"] },\n"
         + "          \"filePath\": { \"type\": \"string\" },\n"
         + "          \"startLine\": { \"type\": \"integer\" },\n"
         + "          \"endLine\": { \"type\": \"integer\" },\n"

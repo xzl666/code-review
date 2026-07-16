@@ -6,7 +6,10 @@
           <h2>通知配置</h2>
           <p>任务成功或失败后自动发送 Webhook 摘要</p>
         </div>
-        <el-button :icon="RefreshCw" @click="refreshActive">刷新</el-button>
+        <div>
+          <el-button :icon="Send" @click="openZhaohuTest">招乎测试</el-button>
+          <el-button :icon="RefreshCw" @click="refreshActive">刷新</el-button>
+        </div>
       </div>
       <el-tabs v-model="activeTab">
         <el-tab-pane label="Webhook 配置" name="config">
@@ -193,6 +196,23 @@
     <el-dialog v-model="resultVisible" title="执行结果" width="720px">
       <pre>{{ resultText }}</pre>
     </el-dialog>
+
+    <el-dialog v-model="zhaohuTestVisible" title="招乎机器人测试" width="680px">
+      <el-form label-width="90px">
+        <el-form-item label="接收人员" required>
+          <el-select v-model="zhaohuTestForm.userIds" multiple filterable collapse-tags>
+            <el-option v-for="user in userOptions" :key="user.userId" :label="`${user.userName} ${user.employeeId}`" :value="user.userId" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="卡片标题" required><el-input v-model="zhaohuTestForm.title" /></el-form-item>
+        <el-form-item label="自定义内容" required><el-input v-model="zhaohuTestForm.content" type="textarea" :rows="7" /></el-form-item>
+        <el-form-item label="消息摘要"><el-input v-model="zhaohuTestForm.summary" /></el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="zhaohuTestVisible = false">取消</el-button>
+        <el-button type="primary" :loading="zhaohuTesting" @click="submitZhaohuTest">发送测试</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -216,6 +236,7 @@ import {
   pageNotifyTemplates,
   previewNotifyTemplate,
   testSendNotifyConfig,
+  testSendZhaohu,
   updateNotifyConfig,
   updateNotifyTemplate,
   type NotifyConfig,
@@ -224,6 +245,7 @@ import {
   type NotifyTemplate,
   type NotifyTemplateForm
 } from '@/api/notification'
+import { listSystemUsers, type SystemUser } from '@/api/user'
 
 const activeTab = ref('config')
 const configLoading = ref(false)
@@ -233,6 +255,10 @@ const configSaving = ref(false)
 const templateSaving = ref(false)
 const configDialogVisible = ref(false)
 const templateDialogVisible = ref(false)
+const zhaohuTestVisible = ref(false)
+const zhaohuTesting = ref(false)
+const userOptions = ref<SystemUser[]>([])
+const zhaohuTestForm = reactive({ userIds: [] as string[], title: '代码检视通知测试', content: '这是一条招乎机器人自定义测试消息。', summary: '代码检视平台测试' })
 const resultVisible = ref(false)
 const resultText = ref('')
 const configEditingId = ref<number>()
@@ -380,6 +406,27 @@ async function testConfig(row: NotifyConfig) {
   resultVisible.value = true
 }
 
+async function openZhaohuTest() {
+  if (!userOptions.value.length) userOptions.value = await listSystemUsers()
+  zhaohuTestVisible.value = true
+}
+
+async function submitZhaohuTest() {
+  if (!zhaohuTestForm.userIds.length || !zhaohuTestForm.title.trim() || !zhaohuTestForm.content.trim()) {
+    ElMessage.warning('请选择接收人员并填写标题和内容')
+    return
+  }
+  zhaohuTesting.value = true
+  try {
+    const result = await testSendZhaohu(zhaohuTestForm)
+    resultText.value = JSON.stringify(result, null, 2)
+    resultVisible.value = true
+    if (!result.failureCount) zhaohuTestVisible.value = false
+  } finally {
+    zhaohuTesting.value = false
+  }
+}
+
 async function setConfigStatus(row: NotifyConfig, enabled: boolean) {
   enabled ? await enableNotifyConfig(row.id) : await disableNotifyConfig(row.id)
   ElMessage.success(enabled ? 'Webhook 已启用' : 'Webhook 已停用')
@@ -521,5 +568,6 @@ onMounted(() => {
   loadConfigs()
   loadTemplates()
   loadLogs()
+  listSystemUsers().then(users => { userOptions.value = users })
 })
 </script>

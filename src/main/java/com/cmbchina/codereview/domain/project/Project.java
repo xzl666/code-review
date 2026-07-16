@@ -1,5 +1,6 @@
 package com.cmbchina.codereview.domain.project;
 
+import java.util.List;
 import lombok.Data;
 
 @Data
@@ -8,8 +9,6 @@ public class Project {
     private Long id;
 
     private String projectName;
-
-    private String projectCode;
 
     private String projectType;
 
@@ -22,6 +21,8 @@ public class Project {
     private String defaultBranch;
 
     private String ownerName;
+
+    private List<String> ownerUserIds;
 
     private Integer reviewDays;
 

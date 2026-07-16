@@ -3,7 +3,7 @@
     <section class="toolbar">
       <div class="toolbar-title">
         <strong>问题列表</strong>
-        <span>查看 AI 与脚本规则发现的问题，并完成处理闭环</span>
+        <span>查看 OpenCodeReview 发现的问题，并完成处理闭环</span>
       </div>
       <el-select v-model="query.projectId" clearable filterable placeholder="项目" class="toolbar-select">
         <el-option v-for="project in projectOptions" :key="project.id" :label="project.projectName" :value="project.id" />
@@ -17,15 +17,13 @@
         @keyup.enter="searchIssues"
       />
       <el-select v-model="query.issueSource" clearable placeholder="来源" class="toolbar-select">
-        <el-option label="AI" value="AI" />
-        <el-option label="脚本" value="SCRIPT" />
+        <el-option label="OpenCodeReview" value="OCR" />
       </el-select>
       <el-select v-model="query.severity" clearable placeholder="严重度" class="toolbar-select">
-        <el-option label="阻断" value="BLOCKER" />
         <el-option label="严重" value="CRITICAL" />
-        <el-option label="主要" value="MAJOR" />
-        <el-option label="次要" value="MINOR" />
-        <el-option label="提示" value="INFO" />
+        <el-option label="高" value="HIGH" />
+        <el-option label="中" value="MEDIUM" />
+        <el-option label="低" value="LOW" />
       </el-select>
       <el-select v-model="query.status" clearable placeholder="状态" class="toolbar-select">
         <el-option label="打开" value="OPEN" />
@@ -41,7 +39,7 @@
       <div class="panel-header">
         <div>
           <h2>问题明细</h2>
-          <p>行号为空表示模型或脚本未能定位到稳定行号</p>
+          <p>行号为空表示 OpenCodeReview 未能定位到稳定行号</p>
         </div>
         <el-tag effect="plain">共 {{ total }} 条</el-tag>
       </div>
@@ -51,7 +49,9 @@
             <el-tag :type="severityType(row.severity)">{{ severityText(row.severity) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="issueSource" label="来源" width="90" />
+        <el-table-column label="来源" width="150">
+          <template #default="{ row }">{{ sourceText(row.issueSource) }}</template>
+        </el-table-column>
         <el-table-column label="命中规则" min-width="190">
           <template #default="{ row }">
             <span
@@ -90,6 +90,9 @@
               {{ row.summary }}
             </span>
           </template>
+        </el-table-column>
+        <el-table-column label="问题责任人" width="150">
+          <template #default="{ row }">{{ row.assigneeName ? `${row.assigneeName} ${row.assigneeEmployeeId || ''}` : '未匹配' }}</template>
         </el-table-column>
         <el-table-column label="文件" min-width="260">
           <template #default="{ row }">
@@ -146,12 +149,14 @@
           <div class="detail-meta-grid">
             <div><span>问题 ID</span><strong>#{{ detail.id }}</strong></div>
             <div><span>检视任务</span><strong>{{ taskText(detail) }}</strong></div>
-            <div><span>来源</span><strong>{{ detail.issueSource }}</strong></div>
+            <div><span>来源</span><strong>{{ sourceText(detail.issueSource) }}</strong></div>
             <div><span>状态</span><strong>{{ statusText(detail.status) }}</strong></div>
             <div><span>问题类型</span><strong>{{ issueTypeText(detail.issueType) }}</strong></div>
             <div><span>检查时间</span><strong>{{ formatTime(detail.createTime) }}</strong></div>
             <div><span>命中规则</span><strong>{{ detail.ruleName || idText('规则', detail.ruleId) }}</strong></div>
-            <div><span>{{ detail.issueSource === 'SCRIPT' ? '脚本' : 'Skill' }}</span><strong>{{ sourceBindingName(detail) }}</strong></div>
+            <div><span>检视引擎</span><strong>alibaba/open-code-review</strong></div>
+            <div><span>问题责任人</span><strong>{{ detail.assigneeName ? `${detail.assigneeName} ${detail.assigneeEmployeeId || ''}` : '未匹配' }}</strong></div>
+            <div><span>Git 提交人</span><strong>{{ detail.commitAuthor || '-' }}</strong></div>
           </div>
         </section>
 
@@ -321,18 +326,18 @@ function currentQuery() {
 
 function severityText(severity: string) {
   return ({
-    BLOCKER: '阻断',
+    BLOCKER: '严重',
     CRITICAL: '严重',
-    ERROR: '主要',
-    HIGH: '主要',
-    MAJOR: '主要',
-    WARNING: '次要',
-    WARN: '次要',
-    MEDIUM: '次要',
-    MINOR: '次要',
-    LOW: '提示',
-    NOTICE: '提示',
-    INFO: '提示'
+    ERROR: '高',
+    HIGH: '高',
+    MAJOR: '高',
+    WARNING: '中',
+    WARN: '中',
+    MEDIUM: '中',
+    MINOR: '中',
+    LOW: '低',
+    NOTICE: '低',
+    INFO: '低'
   } as Record<string, string>)[severity] || severity
 }
 
@@ -392,10 +397,17 @@ function sourceTraceText(issue: ReviewIssue) {
 }
 
 function sourceBindingName(issue: ReviewIssue) {
+  if (issue.issueSource === 'OCR') {
+    return '-'
+  }
   if (issue.issueSource === 'SCRIPT') {
     return issue.scriptName || idText('脚本', issue.scriptId)
   }
   return issue.skillName || idText('Skill', issue.skillId)
+}
+
+function sourceText(value?: string) {
+  return value === 'OCR' ? 'OpenCodeReview' : (value || '-')
 }
 
 function idText(label: string, id?: number) {

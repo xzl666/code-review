@@ -12,4 +12,6 @@ public class ModelConfigValidateRequest {
     private String baseUrl;
 
     private String modelName;
+
+    private String providerType;
 }

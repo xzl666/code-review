@@ -19,6 +19,7 @@ const ISSUE_TYPE_TEXT: Record<string, string> = {
   CONFIG: '配置问题',
   TEST: '测试问题',
   DOCUMENTATION: '文档问题',
+  OTHER: '其他问题',
   CUSTOM: '自定义'
 }
 

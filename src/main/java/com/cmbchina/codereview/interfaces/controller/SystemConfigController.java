@@ -3,15 +3,15 @@ package com.cmbchina.codereview.interfaces.controller;
 import com.cmbchina.codereview.application.service.SystemConfigAppService;
 import com.cmbchina.codereview.common.response.ApiResponse;
 import com.cmbchina.codereview.infrastructure.ai.DeepSeekProperties;
-import com.cmbchina.codereview.interfaces.dto.request.DefaultTokenUpdateRequest;
 import com.cmbchina.codereview.interfaces.dto.request.DeepSeekConfigUpdateRequest;
 import com.cmbchina.codereview.interfaces.dto.request.IdRequest;
 import com.cmbchina.codereview.interfaces.dto.request.ModelConfigSaveRequest;
 import com.cmbchina.codereview.interfaces.dto.request.ModelConfigValidateRequest;
+import com.cmbchina.codereview.interfaces.dto.request.GiteeSshConfigUpdateRequest;
 import com.cmbchina.codereview.interfaces.dto.response.ConfigValidationResponse;
-import com.cmbchina.codereview.interfaces.dto.response.DefaultTokenResponse;
 import com.cmbchina.codereview.interfaces.dto.response.DeepSeekConfigResponse;
 import com.cmbchina.codereview.interfaces.dto.response.ModelConfigResponse;
+import com.cmbchina.codereview.interfaces.dto.response.GiteeSshConfigResponse;
 import java.util.List;
 import javax.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,20 +33,21 @@ public class SystemConfigController {
         this.deepSeekProperties = deepSeekProperties;
     }
 
-    @PostMapping("/default-gitee-token/detail")
-    public ApiResponse<DefaultTokenResponse> defaultGiteeTokenDetail() {
-        return ApiResponse.success(systemConfigAppService.getDefaultGiteeTokenDetail());
+    @PostMapping("/gitee-ssh/detail")
+    public ApiResponse<GiteeSshConfigResponse> giteeSshConfigDetail() {
+        return ApiResponse.success(systemConfigAppService.getGiteeSshConfigDetail());
     }
 
-    @PostMapping("/default-gitee-token/update")
-    public ApiResponse<Void> updateDefaultGiteeToken(@Valid @RequestBody DefaultTokenUpdateRequest request) {
-        systemConfigAppService.updateDefaultGiteeToken(request);
+    @PostMapping("/gitee-ssh/update")
+    public ApiResponse<Void> updateGiteeSshConfig(@RequestBody GiteeSshConfigUpdateRequest request) {
+        systemConfigAppService.updateGiteeSshConfig(request);
         return ApiResponse.success();
     }
 
-    @PostMapping("/default-gitee-token/validate")
-    public ApiResponse<ConfigValidationResponse> validateDefaultGiteeToken() {
-        return ApiResponse.success(systemConfigAppService.validateDefaultGiteeToken());
+    @PostMapping("/gitee-ssh/validate")
+    public ApiResponse<ConfigValidationResponse> validateGiteeSshConfig(
+        @RequestBody(required = false) GiteeSshConfigUpdateRequest request) {
+        return ApiResponse.success(systemConfigAppService.validateGiteeSshConfig(request));
     }
 
     @PostMapping("/deepseek/detail")

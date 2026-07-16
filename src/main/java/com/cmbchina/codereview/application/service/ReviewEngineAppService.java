@@ -4,29 +4,23 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.cmbchina.codereview.common.enums.ReviewTaskStatus;
 import com.cmbchina.codereview.common.enums.BaseStatus;
-import com.cmbchina.codereview.common.enums.RuleKind;
+import com.cmbchina.codereview.common.enums.OcrReviewMode;
 import com.cmbchina.codereview.common.exception.BizException;
 import com.cmbchina.codereview.common.exception.ErrorCode;
 import com.cmbchina.codereview.domain.project.Project;
 import com.cmbchina.codereview.domain.project.ProjectRepository;
-import com.cmbchina.codereview.infrastructure.ai.DeepSeekProperties;
-import com.cmbchina.codereview.infrastructure.git.DiffChunk;
-import com.cmbchina.codereview.infrastructure.git.DiffChunkService;
 import com.cmbchina.codereview.infrastructure.git.GitDiffService;
 import com.cmbchina.codereview.infrastructure.git.GitDiffSummary;
 import com.cmbchina.codereview.infrastructure.git.LocalRepositoryManager;
-import com.cmbchina.codereview.infrastructure.persistence.entity.AiSkillEntity;
 import com.cmbchina.codereview.infrastructure.persistence.entity.ReviewIssueEntity;
 import com.cmbchina.codereview.infrastructure.persistence.entity.ReviewRuleEntity;
-import com.cmbchina.codereview.infrastructure.persistence.entity.ScriptRuleEntity;
 import com.cmbchina.codereview.infrastructure.persistence.entity.ReviewTaskEntity;
-import com.cmbchina.codereview.infrastructure.persistence.mapper.AiSkillMapper;
 import com.cmbchina.codereview.infrastructure.persistence.mapper.ReviewIssueMapper;
 import com.cmbchina.codereview.infrastructure.persistence.mapper.ReviewRuleMapper;
-import com.cmbchina.codereview.infrastructure.persistence.mapper.ScriptRuleMapper;
 import com.cmbchina.codereview.infrastructure.persistence.mapper.ReviewTaskMapper;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executor;
@@ -40,56 +34,38 @@ public class ReviewEngineAppService {
 
     private final ReviewTaskMapper reviewTaskMapper;
     private final ReviewIssueMapper reviewIssueMapper;
-    private final AiSkillMapper aiSkillMapper;
     private final ReviewRuleMapper reviewRuleMapper;
-    private final ScriptRuleMapper scriptRuleMapper;
     private final ProjectRepository projectRepository;
-    private final SystemConfigAppService systemConfigAppService;
     private final LocalRepositoryManager localRepositoryManager;
     private final GitDiffService gitDiffService;
-    private final DiffChunkService diffChunkService;
-    private final DeepSeekProperties deepSeekProperties;
-    private final AiReviewExecutor aiReviewExecutor;
-    private final ScriptReviewExecutor scriptReviewExecutor;
-    private final AiSkillRuleMatcher aiSkillRuleMatcher;
+    private final OpenCodeReviewExecutor openCodeReviewExecutor;
     private final NotificationDispatchService notificationDispatchService;
+    private final ZhaohuNotificationService zhaohuNotificationService;
     private final ReviewIssueFingerprintService reviewIssueFingerprintService;
     private final ReviewReportAppService reviewReportAppService;
     private final Executor reviewTaskExecutor;
 
     public ReviewEngineAppService(ReviewTaskMapper reviewTaskMapper,
                                   ReviewIssueMapper reviewIssueMapper,
-                                  AiSkillMapper aiSkillMapper,
                                   ReviewRuleMapper reviewRuleMapper,
-                                  ScriptRuleMapper scriptRuleMapper,
                                   ProjectRepository projectRepository,
-                                  SystemConfigAppService systemConfigAppService,
                                   LocalRepositoryManager localRepositoryManager,
                                   GitDiffService gitDiffService,
-                                  DiffChunkService diffChunkService,
-                                  DeepSeekProperties deepSeekProperties,
-                                  AiReviewExecutor aiReviewExecutor,
-                                  ScriptReviewExecutor scriptReviewExecutor,
-                                  AiSkillRuleMatcher aiSkillRuleMatcher,
+                                  OpenCodeReviewExecutor openCodeReviewExecutor,
                                   NotificationDispatchService notificationDispatchService,
+                                  ZhaohuNotificationService zhaohuNotificationService,
                                   ReviewIssueFingerprintService reviewIssueFingerprintService,
                                   ReviewReportAppService reviewReportAppService,
                                   @Qualifier("reviewTaskExecutor") Executor reviewTaskExecutor) {
         this.reviewTaskMapper = reviewTaskMapper;
         this.reviewIssueMapper = reviewIssueMapper;
-        this.aiSkillMapper = aiSkillMapper;
         this.reviewRuleMapper = reviewRuleMapper;
-        this.scriptRuleMapper = scriptRuleMapper;
         this.projectRepository = projectRepository;
-        this.systemConfigAppService = systemConfigAppService;
         this.localRepositoryManager = localRepositoryManager;
         this.gitDiffService = gitDiffService;
-        this.diffChunkService = diffChunkService;
-        this.deepSeekProperties = deepSeekProperties;
-        this.aiReviewExecutor = aiReviewExecutor;
-        this.scriptReviewExecutor = scriptReviewExecutor;
-        this.aiSkillRuleMatcher = aiSkillRuleMatcher;
+        this.openCodeReviewExecutor = openCodeReviewExecutor;
         this.notificationDispatchService = notificationDispatchService;
+        this.zhaohuNotificationService = zhaohuNotificationService;
         this.reviewIssueFingerprintService = reviewIssueFingerprintService;
         this.reviewReportAppService = reviewReportAppService;
         this.reviewTaskExecutor = reviewTaskExecutor;
@@ -112,19 +88,22 @@ public class ReviewEngineAppService {
                 throw new BizException(ErrorCode.NOT_FOUND, "project not found");
             }
             String branch = defaultIfBlank(task.getReviewBranch(), project.getDefaultBranch());
-            Path repoDir = localRepositoryManager.prepare(project, branch, resolveToken(project));
-            GitDiffSummary diffSummary = gitDiffService.summarize(repoDir, task.getReviewDays());
-            AiRuleExecutionResult aiRuleResult = executeAiRules(taskId, project, diffSummary, branch, task.getReviewDays());
-            ScriptRuleExecutionResult scriptRuleResult = executeScriptRules(taskId, project, diffSummary, branch, task.getReviewDays());
+            Path repoDir = localRepositoryManager.prepare(project, branch);
+            GitDiffSummary diffSummary = prepareDiff(repoDir, task);
+            OpenCodeReviewExecutionResult engineResult = executeOpenCodeReview(taskId, project, repoDir, diffSummary, task);
             reviewIssueFingerprintService.applyHistoricalIgnoredIssues(taskId, project.getId());
             TaskIssueCounters counters = countIssues(taskId);
-            markSuccess(taskId, diffSummary, counters, aiRuleResult, scriptRuleResult);
+            markSuccess(taskId, diffSummary, counters, engineResult);
             generateReport(taskId);
-            notificationDispatchService.notifyTaskSuccess(reviewTaskMapper.selectById(taskId));
+            ReviewTaskEntity completedTask = reviewTaskMapper.selectById(taskId);
+            notificationDispatchService.notifyTaskSuccess(completedTask);
+            zhaohuNotificationService.notifyDailyReviewCompleted(completedTask);
         } catch (Exception exception) {
             markFailed(taskId, exception.getMessage());
             generateReport(taskId);
-            notificationDispatchService.notifyTaskFailed(reviewTaskMapper.selectById(taskId));
+            ReviewTaskEntity failedTask = reviewTaskMapper.selectById(taskId);
+            notificationDispatchService.notifyTaskFailed(failedTask);
+            zhaohuNotificationService.notifyDailyReviewCompleted(failedTask);
         }
     }
 
@@ -136,89 +115,60 @@ public class ReviewEngineAppService {
         }
     }
 
-    private String resolveToken(Project project) {
-        if (StringUtils.hasText(project.getProjectToken())) {
-            return project.getProjectToken();
-        }
-        if (project.getUseDefaultToken() != null && project.getUseDefaultToken() == 1) {
-            return systemConfigAppService.getDefaultGiteeToken();
-        }
-        return null;
-    }
-
-    private ScriptRuleExecutionResult executeScriptRules(Long taskId,
-                                                         Project project,
-                                                         GitDiffSummary diffSummary,
-                                                         String branch,
-                                                         Integer reviewDays) {
-        LambdaQueryWrapper<ScriptRuleEntity> wrapper = new LambdaQueryWrapper<ScriptRuleEntity>()
-            .eq(ScriptRuleEntity::getStatus, BaseStatus.ENABLED.getValue())
-            .and(rule -> rule.eq(ScriptRuleEntity::getProjectType, "ALL")
-                .or()
-                .eq(ScriptRuleEntity::getProjectType, project.getProjectType()))
-            .orderByAsc(ScriptRuleEntity::getSortOrder)
-            .orderByAsc(ScriptRuleEntity::getId);
-        List<ScriptRuleEntity> scripts = scriptRuleMapper.selectList(wrapper);
-        return scriptReviewExecutor.execute(taskId, project, scripts, diffSummary, branch, reviewDays);
-    }
-
-    private AiRuleExecutionResult executeAiRules(Long taskId, Project project, GitDiffSummary diffSummary, String branch, Integer reviewDays) {
-        AiRuleExecutionResult result = new AiRuleExecutionResult();
+    private OpenCodeReviewExecutionResult executeOpenCodeReview(Long taskId,
+                                                                Project project,
+                                                                Path repoDir,
+                                                                GitDiffSummary diffSummary,
+                                                                ReviewTaskEntity task) {
         LambdaQueryWrapper<ReviewRuleEntity> wrapper = new LambdaQueryWrapper<ReviewRuleEntity>()
             .eq(ReviewRuleEntity::getStatus, BaseStatus.ENABLED.getValue())
-            .eq(ReviewRuleEntity::getRuleKind, RuleKind.AI.name())
-            .and(rule -> rule.eq(ReviewRuleEntity::getProjectType, "ALL")
-                .or()
-                .eq(ReviewRuleEntity::getProjectType, project.getProjectType()))
             .orderByAsc(ReviewRuleEntity::getSortOrder)
             .orderByAsc(ReviewRuleEntity::getId);
         List<ReviewRuleEntity> rules = reviewRuleMapper.selectList(wrapper);
-        if (rules.isEmpty()) {
-            return result;
+        return openCodeReviewExecutor.execute(taskId, project, repoDir, diffSummary, task, rules);
+    }
+
+    private GitDiffSummary prepareDiff(Path repoDir, ReviewTaskEntity task) {
+        if (task.getReviewStartTime() != null && task.getReviewEndTime() != null) {
+            return gitDiffService.summarizeTimeRange(repoDir, task.getReviewBranch(),
+                task.getReviewStartTime(), task.getReviewEndTime(), ZoneId.of("Asia/Shanghai"));
         }
-        List<DiffChunk> chunks = diffChunkService.split(diffSummary, deepSeekProperties.getMaxDiffCharsPerRequest());
-        if (chunks.isEmpty()) {
-            return result;
-        }
-        for (ReviewRuleEntity rule : rules) {
-            if (rule.getSkillId() == null) {
-                continue;
-            }
-            AiSkillEntity skill = aiSkillMapper.selectById(rule.getSkillId());
-            if (skill == null || skill.getStatus() == null || skill.getStatus() != BaseStatus.ENABLED.getValue()) {
-                continue;
-            }
-            if (!aiSkillRuleMatcher.appliesToProject(skill, project)) {
-                continue;
-            }
-            for (DiffChunk chunk : chunks) {
-                if (!aiSkillRuleMatcher.matchesChunk(skill, chunk)) {
-                    continue;
+        OcrReviewMode mode = reviewMode(task.getReviewMode());
+        switch (mode) {
+            case COMMIT:
+                return gitDiffService.summarizeCommit(repoDir,
+                    localRepositoryManager.ensureRef(repoDir, task.getCommitRef()));
+            case WORKSPACE:
+                return gitDiffService.summarizeWorkspace(repoDir);
+            case SCAN:
+                return gitDiffService.emptySummary();
+            case RANGE:
+            default:
+                if (!StringUtils.hasText(task.getBaseRef()) || !StringUtils.hasText(task.getTargetRef())) {
+                    throw new BizException(ErrorCode.PARAM_ERROR, "分支区间检视必须指定起始版本和目标版本");
                 }
-                result.aiCallCount++;
-                try {
-                    aiReviewExecutor.execute(taskId, project, rule, skill, chunk, branch, reviewDays);
-                } catch (Exception exception) {
-                    result.warnings.add(limit("AI review skipped for rule " + sourceName(rule.getRuleName(), rule.getId())
-                        + ", skill " + sourceName(skill.getSkillName(), skill.getId())
-                        + ", file " + chunk.getFilePath()
-                        + ", chunk " + chunk.getChunkIndex()
-                        + ": " + exception.getMessage(), 500));
-                }
-            }
+                String baseRef = localRepositoryManager.ensureRef(repoDir, task.getBaseRef());
+                String targetRef = localRepositoryManager.ensureRef(repoDir, task.getTargetRef());
+                return gitDiffService.summarizeRange(repoDir, baseRef, targetRef);
         }
-        return result;
+    }
+
+    private OcrReviewMode reviewMode(String value) {
+        try {
+            return OcrReviewMode.valueOf(defaultIfBlank(value, OcrReviewMode.RANGE.name()));
+        } catch (IllegalArgumentException ignored) {
+            return OcrReviewMode.RANGE;
+        }
     }
 
     private TaskIssueCounters countIssues(Long taskId) {
         TaskIssueCounters counters = new TaskIssueCounters();
         counters.issueCount = reviewIssueMapper.selectCount(new LambdaQueryWrapper<ReviewIssueEntity>()
             .eq(ReviewIssueEntity::getTaskId, taskId)).intValue();
-        counters.blockerCount = countSeverity(taskId, "BLOCKER");
         counters.criticalCount = countSeverity(taskId, "CRITICAL");
-        counters.majorCount = countSeverity(taskId, "MAJOR");
-        counters.minorCount = countSeverity(taskId, "MINOR");
-        counters.infoCount = countSeverity(taskId, "INFO");
+        counters.highCount = countSeverity(taskId, "HIGH");
+        counters.mediumCount = countSeverity(taskId, "MEDIUM");
+        counters.lowCount = countSeverity(taskId, "LOW");
         return counters;
     }
 
@@ -241,24 +191,31 @@ public class ReviewEngineAppService {
     private void markSuccess(Long taskId,
                              GitDiffSummary diffSummary,
                              TaskIssueCounters counters,
-                             AiRuleExecutionResult aiRuleResult,
-                             ScriptRuleExecutionResult scriptRuleResult) {
+                             OpenCodeReviewExecutionResult engineResult) {
         LambdaUpdateWrapper<ReviewTaskEntity> wrapper = new LambdaUpdateWrapper<ReviewTaskEntity>()
             .eq(ReviewTaskEntity::getId, taskId)
             .set(ReviewTaskEntity::getStatus, ReviewTaskStatus.SUCCESS.name())
             .set(ReviewTaskEntity::getCommitCount, diffSummary.getCommitCount())
-            .set(ReviewTaskEntity::getDiffFileCount, diffSummary.getDiffFileCount())
+            .set(ReviewTaskEntity::getDiffFileCount,
+                engineResult.getReviewedFileCount() != null && engineResult.getReviewedFileCount() > 0
+                    ? engineResult.getReviewedFileCount() : diffSummary.getDiffFileCount())
             .set(ReviewTaskEntity::getIssueCount, counters.issueCount)
-            .set(ReviewTaskEntity::getBlockerCount, counters.blockerCount)
             .set(ReviewTaskEntity::getCriticalCount, counters.criticalCount)
-            .set(ReviewTaskEntity::getMajorCount, counters.majorCount)
-            .set(ReviewTaskEntity::getMinorCount, counters.minorCount)
-            .set(ReviewTaskEntity::getInfoCount, counters.infoCount)
-            .set(ReviewTaskEntity::getAiCallCount, aiRuleResult.aiCallCount)
+            .set(ReviewTaskEntity::getHighCount, counters.highCount)
+            .set(ReviewTaskEntity::getMediumCount, counters.mediumCount)
+            .set(ReviewTaskEntity::getLowCount, counters.lowCount)
+            .set(ReviewTaskEntity::getAiCallCount, engineResult.getAiCallCount())
+            .set(ReviewTaskEntity::getAiSuccessCount, engineResult.getAiSuccessCount())
+            .set(ReviewTaskEntity::getAiFailureCount, engineResult.getAiFailureCount())
+            .set(ReviewTaskEntity::getInputTokenCount, engineResult.getInputTokenCount())
+            .set(ReviewTaskEntity::getOutputTokenCount, engineResult.getOutputTokenCount())
+            .set(ReviewTaskEntity::getTotalTokenCount, engineResult.getTotalTokenCount())
+            .set(ReviewTaskEntity::getCacheReadTokenCount, engineResult.getCacheReadTokenCount())
+            .set(ReviewTaskEntity::getCacheWriteTokenCount, engineResult.getCacheWriteTokenCount())
             .set(ReviewTaskEntity::getSkippedCommitCount, diffSummary.getSkippedCommitCount())
             .set(ReviewTaskEntity::getSkippedFileCount, diffSummary.getSkippedFileCount())
             .set(ReviewTaskEntity::getEndTime, LocalDateTime.now())
-            .set(ReviewTaskEntity::getWarningMessage, warningMessage(diffSummary, aiRuleResult.warnings, scriptRuleResult.getWarnings()))
+            .set(ReviewTaskEntity::getWarningMessage, warningMessage(diffSummary, engineResult.getWarnings()))
             .set(ReviewTaskEntity::getErrorMessage, null);
         reviewTaskMapper.update(null, wrapper);
     }
@@ -284,20 +241,13 @@ public class ReviewEngineAppService {
         return value.substring(0, maxLength);
     }
 
-    private String sourceName(String name, Long id) {
-        return StringUtils.hasText(name) ? name + " (#" + id + ")" : "#" + id;
-    }
-
-    private String warningMessage(GitDiffSummary diffSummary, List<String> aiWarnings, List<String> scriptWarnings) {
+    private String warningMessage(GitDiffSummary diffSummary, List<String> engineWarnings) {
         List<String> warnings = new ArrayList<>();
         if (diffSummary.getWarnings() != null && !diffSummary.getWarnings().isEmpty()) {
             warnings.addAll(diffSummary.getWarnings());
         }
-        if (aiWarnings != null && !aiWarnings.isEmpty()) {
-            warnings.addAll(aiWarnings);
-        }
-        if (scriptWarnings != null && !scriptWarnings.isEmpty()) {
-            warnings.addAll(scriptWarnings);
+        if (engineWarnings != null && !engineWarnings.isEmpty()) {
+            warnings.addAll(engineWarnings);
         }
         if (warnings.isEmpty()) {
             return null;
@@ -305,17 +255,11 @@ public class ReviewEngineAppService {
         return limit(String.join(" ", warnings), 1000);
     }
 
-    private static class AiRuleExecutionResult {
-        private Integer aiCallCount = 0;
-        private List<String> warnings = new ArrayList<>();
-    }
-
     private static class TaskIssueCounters {
         private Integer issueCount = 0;
-        private Integer blockerCount = 0;
         private Integer criticalCount = 0;
-        private Integer majorCount = 0;
-        private Integer minorCount = 0;
-        private Integer infoCount = 0;
+        private Integer highCount = 0;
+        private Integer mediumCount = 0;
+        private Integer lowCount = 0;
     }
 }

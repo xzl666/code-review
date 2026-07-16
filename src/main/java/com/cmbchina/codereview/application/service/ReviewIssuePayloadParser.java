@@ -31,7 +31,7 @@ public class ReviewIssuePayloadParser {
                                          String scriptName,
                                          IssueSource issueSource,
                                          String defaultFilePath) throws Exception {
-        String defaultSeverity = rule == null ? "MAJOR" : rule.getSeverity();
+        String defaultSeverity = rule == null ? "HIGH" : rule.getSeverity();
         String defaultIssueType = rule == null ? "CUSTOM" : rule.getRuleType();
         String defaultSummary = rule == null ? defaultIssueType : rule.getRuleName();
         return parse(payload, taskId, project, rule, skillId, skillName, scriptId, scriptName,
@@ -127,16 +127,19 @@ public class ReviewIssuePayloadParser {
             return defaultValue;
         }
         String upper = value.toUpperCase();
-        if ("ERROR".equals(upper) || "HIGH".equals(upper)) {
-            return "MAJOR";
+        if ("ERROR".equals(upper) || "MAJOR".equals(upper)) {
+            return "HIGH";
         }
-        if ("WARNING".equals(upper) || "WARN".equals(upper) || "MEDIUM".equals(upper)) {
-            return "MINOR";
+        if ("WARNING".equals(upper) || "WARN".equals(upper) || "MINOR".equals(upper)) {
+            return "MEDIUM";
         }
-        if ("LOW".equals(upper) || "NOTICE".equals(upper)) {
-            return "INFO";
+        if ("NOTICE".equals(upper) || "INFO".equals(upper)) {
+            return "LOW";
         }
-        if ("BLOCKER".equals(upper) || "CRITICAL".equals(upper) || "MAJOR".equals(upper) || "MINOR".equals(upper) || "INFO".equals(upper)) {
+        if ("BLOCKER".equals(upper)) {
+            return "CRITICAL";
+        }
+        if ("CRITICAL".equals(upper) || "HIGH".equals(upper) || "MEDIUM".equals(upper) || "LOW".equals(upper)) {
             return upper;
         }
         return defaultValue;

@@ -21,7 +21,7 @@ class GitDiffServiceWarningTest {
         List<String> warnings = (List<String>) method.invoke(service, summary);
 
         assertThat(warnings)
-            .contains("Skipped 2 oversized or timed-out commits.")
-            .contains("Skipped 7 files because their git diff commands failed or timed out.");
+            .contains("为控制检视范围，已跳过 2 个超出数量限制或读取失败的提交。")
+            .contains("为避免模型上下文溢出，已跳过 7 个超出数量、大小限制或读取失败的文件。");
     }
 }

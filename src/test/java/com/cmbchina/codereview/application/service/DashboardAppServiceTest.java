@@ -41,11 +41,15 @@ class DashboardAppServiceTest {
         when(projectMapper.selectCount(any(Wrapper.class))).thenReturn(3L, 2L);
         when(reviewTaskMapper.selectCount(any(Wrapper.class))).thenReturn(4L);
         ReviewTaskEntity firstTask = new ReviewTaskEntity();
-        firstTask.setAiCallCount(5);
+        firstTask.setAiSuccessCount(4);
+        firstTask.setAiFailureCount(1);
+        firstTask.setTotalTokenCount(1000L);
         ReviewTaskEntity secondTask = new ReviewTaskEntity();
         secondTask.setAiCallCount(null);
         ReviewTaskEntity thirdTask = new ReviewTaskEntity();
-        thirdTask.setAiCallCount(7);
+        thirdTask.setAiSuccessCount(7);
+        thirdTask.setAiFailureCount(0);
+        thirdTask.setTotalTokenCount(2500L);
         when(reviewTaskMapper.selectList(any(Wrapper.class))).thenReturn(Arrays.asList(firstTask, secondTask, thirdTask));
         when(reviewIssueMapper.selectCount(any(Wrapper.class))).thenReturn(8L, 6L, 1L, 2L);
 
@@ -57,31 +61,31 @@ class DashboardAppServiceTest {
         assertEquals(8L, overview.getTodayIssueCount());
         assertEquals(6L, overview.getOpenIssueCount());
         assertEquals(12L, overview.getTodayAiCallCount());
-        assertEquals(1L, overview.getBlockerCount());
-        assertEquals(2L, overview.getCriticalCount());
+        assertEquals(3500L, overview.getTodayTokenCount());
+        assertEquals(3500L, overview.getTotalTokenCount());
+        assertEquals(1L, overview.getCriticalCount());
+        assertEquals(2L, overview.getHighCount());
     }
 
     @Test
     void severityDistributionReturnsChineseLabelsInFixedOrder() {
         when(reviewIssueMapper.selectList(any(Wrapper.class))).thenReturn(Arrays.asList(
-            issue("MAJOR"),
-            issue("MAJOR"),
-            issue("MINOR"),
-            issue("INFO")
+            issue("HIGH"),
+            issue("HIGH"),
+            issue("MEDIUM"),
+            issue("LOW")
         ));
 
         List<NameValueResponse> distribution = dashboardAppService.severityDistribution();
 
-        assertEquals("阻断", distribution.get(0).getName());
+        assertEquals("严重", distribution.get(0).getName());
         assertEquals(0L, distribution.get(0).getValue());
-        assertEquals("严重", distribution.get(1).getName());
-        assertEquals(0L, distribution.get(1).getValue());
-        assertEquals("主要", distribution.get(2).getName());
-        assertEquals(2L, distribution.get(2).getValue());
-        assertEquals("次要", distribution.get(3).getName());
+        assertEquals("高", distribution.get(1).getName());
+        assertEquals(2L, distribution.get(1).getValue());
+        assertEquals("中", distribution.get(2).getName());
+        assertEquals(1L, distribution.get(2).getValue());
+        assertEquals("低", distribution.get(3).getName());
         assertEquals(1L, distribution.get(3).getValue());
-        assertEquals("提示", distribution.get(4).getName());
-        assertEquals(1L, distribution.get(4).getValue());
     }
 
     @Test

@@ -11,6 +11,7 @@ import com.cmbchina.codereview.infrastructure.persistence.entity.ProjectEntity;
 import com.cmbchina.codereview.infrastructure.persistence.mapper.ProjectMapper;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
 
@@ -18,26 +19,30 @@ import org.springframework.util.StringUtils;
 public class ProjectRepositoryImpl implements ProjectRepository {
 
     private final ProjectMapper projectMapper;
+    private final JdbcTemplate jdbcTemplate;
 
-    public ProjectRepositoryImpl(ProjectMapper projectMapper) {
+    public ProjectRepositoryImpl(ProjectMapper projectMapper, JdbcTemplate jdbcTemplate) {
         this.projectMapper = projectMapper;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Override
     public Long save(Project project) {
         ProjectEntity entity = ProjectConverter.toEntity(project);
         projectMapper.insert(entity);
+        saveOwners(entity.getId(), project.getOwnerUserIds());
         return entity.getId();
     }
 
     @Override
     public void update(Project project) {
         projectMapper.updateById(ProjectConverter.toEntity(project));
+        saveOwners(project.getId(), project.getOwnerUserIds());
     }
 
     @Override
     public Project findById(Long id) {
-        return ProjectConverter.toDomain(projectMapper.selectById(id));
+        return withOwners(ProjectConverter.toDomain(projectMapper.selectById(id)));
     }
 
     @Override
@@ -46,7 +51,7 @@ public class ProjectRepositoryImpl implements ProjectRepository {
             .eq(ProjectEntity::getProjectName, projectName)
             .eq(ProjectEntity::getRepoUrl, repoUrl)
             .last("LIMIT 1");
-        return ProjectConverter.toDomain(projectMapper.selectOne(wrapper));
+        return withOwners(ProjectConverter.toDomain(projectMapper.selectOne(wrapper)));
     }
 
     @Override
@@ -58,7 +63,7 @@ public class ProjectRepositoryImpl implements ProjectRepository {
             .orderByDesc(ProjectEntity::getCreateTime);
         Page<ProjectEntity> page = projectMapper.selectPage(new Page<>(pageNo, pageSize), wrapper);
         List<Project> records = page.getRecords().stream()
-            .map(ProjectConverter::toDomain)
+            .map(ProjectConverter::toDomain).map(this::withOwners)
             .collect(Collectors.toList());
         return new PageResponse<>(records, page.getTotal(), pageNo, pageSize);
     }
@@ -70,7 +75,17 @@ public class ProjectRepositoryImpl implements ProjectRepository {
             .eq(ProjectEntity::getScheduleEnabled, 1)
             .isNotNull(ProjectEntity::getScheduleCron);
         return projectMapper.selectList(wrapper).stream()
-            .map(ProjectConverter::toDomain)
+            .map(ProjectConverter::toDomain).map(this::withOwners)
+            .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<Project> listEnabled() {
+        return projectMapper.selectList(new LambdaQueryWrapper<ProjectEntity>()
+                .eq(ProjectEntity::getStatus, 1)
+                .orderByAsc(ProjectEntity::getId))
+            .stream()
+            .map(ProjectConverter::toDomain).map(this::withOwners)
             .collect(Collectors.toList());
     }
 
@@ -85,5 +100,20 @@ public class ProjectRepositoryImpl implements ProjectRepository {
             .eq(ProjectEntity::getId, id)
             .set(ProjectEntity::getStatus, status);
         projectMapper.update(null, wrapper);
+    }
+
+    private Project withOwners(Project project) {
+        if (project != null) {
+            project.setOwnerUserIds(jdbcTemplate.queryForList(
+                "SELECT user_id FROM cr_project_owner WHERE project_id = ? ORDER BY id", String.class, project.getId()));
+        }
+        return project;
+    }
+
+    private void saveOwners(Long projectId, List<String> userIds) {
+        jdbcTemplate.update("DELETE FROM cr_project_owner WHERE project_id = ?", projectId);
+        if (userIds == null) return;
+        userIds.stream().filter(StringUtils::hasText).distinct().forEach(userId ->
+            jdbcTemplate.update("INSERT INTO cr_project_owner (project_id,user_id) VALUES (?,?)", projectId, userId));
     }
 }

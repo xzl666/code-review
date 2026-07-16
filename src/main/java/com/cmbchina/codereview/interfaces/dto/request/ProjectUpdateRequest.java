@@ -1,6 +1,6 @@
 package com.cmbchina.codereview.interfaces.dto.request;
 
-import javax.validation.constraints.Min;
+import java.util.List;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 import lombok.Data;
@@ -13,9 +13,6 @@ public class ProjectUpdateRequest {
 
     @NotBlank(message = "不能为空")
     private String projectName;
-
-    @NotBlank(message = "不能为空")
-    private String projectCode;
 
     @NotBlank(message = "不能为空")
     private String projectType;
@@ -31,8 +28,7 @@ public class ProjectUpdateRequest {
 
     private String ownerName;
 
-    @Min(value = 1, message = "必须大于 0")
-    private Integer reviewDays;
+    private List<String> ownerUserIds;
 
     private String scheduleCron;
 

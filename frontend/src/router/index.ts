@@ -1,11 +1,10 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
+import { CURRENT_USER_KEY } from '@/utils/currentUser'
 
 const DashboardView = () => import('@/views/DashboardView.vue')
 const ProjectView = () => import('@/views/ProjectView.vue')
 const RuleView = () => import('@/views/RuleView.vue')
-const SkillView = () => import('@/views/SkillView.vue')
-const ScriptRuleView = () => import('@/views/ScriptRuleView.vue')
 const ReviewTaskView = () => import('@/views/ReviewTaskView.vue')
 const IssueView = () => import('@/views/IssueView.vue')
 const NotificationView = () => import('@/views/NotificationView.vue')
@@ -20,8 +19,6 @@ export const routes: RouteRecordRaw[] = [
       { path: 'dashboard', name: 'dashboard', component: DashboardView, meta: { title: '首页看板' } },
       { path: 'projects', name: 'projects', component: ProjectView, meta: { title: '项目管理' } },
       { path: 'rules', name: 'rules', component: RuleView, meta: { title: '检视规则' } },
-      { path: 'skills', name: 'skills', component: SkillView, meta: { title: 'AI Skill' } },
-      { path: 'scripts', name: 'scripts', component: ScriptRuleView, meta: { title: '脚本规则' } },
       { path: 'review-tasks', name: 'review-tasks', component: ReviewTaskView, meta: { title: '检视任务' } },
       { path: 'issues', name: 'issues', component: IssueView, meta: { title: '问题列表' } },
       { path: 'notifications', name: 'notifications', component: NotificationView, meta: { title: '通知配置' } },
@@ -30,7 +27,14 @@ export const routes: RouteRecordRaw[] = [
   }
 ]
 
-export default createRouter({
+const router = createRouter({
   history: createWebHistory(),
   routes
 })
+
+router.beforeEach((to) => {
+  const userId = typeof to.query.userId === 'string' ? to.query.userId : ''
+  if (/^[A-Fa-f0-9]{32,64}$/.test(userId)) localStorage.setItem(CURRENT_USER_KEY, userId)
+})
+
+export default router

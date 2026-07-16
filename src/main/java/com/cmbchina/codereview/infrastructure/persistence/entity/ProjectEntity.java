@@ -16,8 +16,6 @@ public class ProjectEntity extends BaseEntity {
 
     private String projectName;
 
-    private String projectCode;
-
     private String projectType;
 
     private String repoUrl;

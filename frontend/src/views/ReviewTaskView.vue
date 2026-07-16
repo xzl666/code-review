@@ -3,7 +3,7 @@
     <section class="toolbar">
       <div class="toolbar-title">
         <strong>检视任务</strong>
-        <span>跟踪 Git、AI 与脚本规则的执行状态</span>
+        <span>跟踪 Git 与 OpenCodeReview 引擎的执行状态</span>
       </div>
       <el-input v-model="query.projectName" clearable placeholder="项目名称" class="toolbar-input" @keyup.enter="loadTasks">
         <template #prefix><Search :size="16" /></template>
@@ -42,16 +42,28 @@
           </template>
         </el-table-column>
         <el-table-column prop="projectName" label="项目" min-width="150" />
+        <el-table-column label="触发方式" width="95">
+          <template #default="{ row }">{{ triggerText(row.triggerType) }}</template>
+        </el-table-column>
         <el-table-column prop="status" label="状态" width="110">
           <template #default="{ row }">
             <el-tag :type="statusType(row.status)" effect="plain">{{ statusText(row.status) }}</el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="方式" width="100">
+          <template #default="{ row }">{{ reviewModeText(row.reviewMode) }}</template>
+        </el-table-column>
         <el-table-column prop="reviewBranch" label="分支" width="110" />
         <el-table-column prop="commitCount" label="提交" width="80" />
         <el-table-column prop="diffFileCount" label="文件" width="80" />
         <el-table-column prop="issueCount" label="问题" width="80" />
-        <el-table-column prop="aiCallCount" label="AI 调用" width="95" />
+        <el-table-column prop="aiCallCount" label="模型调用" width="95" />
+        <el-table-column label="成功/失败" width="105">
+          <template #default="{ row }">{{ row.aiSuccessCount || 0 }} / {{ row.aiFailureCount || 0 }}</template>
+        </el-table-column>
+        <el-table-column label="Token" width="120" align="right">
+          <template #default="{ row }">{{ formatNumber(row.totalTokenCount) }}</template>
+        </el-table-column>
         <el-table-column label="裁剪" width="100">
           <template #default="{ row }">
             <el-tag v-if="hasSkipped(row)" type="warning" effect="plain">{{ (row.skippedCommitCount || 0) + (row.skippedFileCount || 0) }}</el-tag>
@@ -83,18 +95,57 @@
       </div>
     </section>
 
-    <el-dialog v-model="startDialogVisible" title="手动发起检视" width="620px">
-      <el-form ref="startFormRef" :model="startForm" :rules="startRules" label-width="96px">
+    <el-dialog v-model="startDialogVisible" title="手动发起检视" width="680px">
+      <el-form ref="startFormRef" :model="startForm" :rules="startRules" label-width="112px">
         <el-form-item label="项目" prop="projectId">
           <el-select v-model="startForm.projectId" filterable placeholder="选择启用项目" @change="fillProjectDefaults">
             <el-option v-for="project in projectOptions" :key="project.id" :label="project.projectName" :value="project.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="分支">
-          <el-input v-model="startForm.branch" placeholder="为空时使用项目默认分支" />
+        <el-form-item label="检视方式">
+          <el-segmented v-model="startForm.reviewMode" :options="reviewModeOptions" />
         </el-form-item>
-        <el-form-item label="检视天数">
-          <el-input-number v-model="startForm.reviewDays" :min="1" :max="365" />
+        <el-form-item label="检出分支" required>
+          <el-input v-model="startForm.branch" @change="loadStartCommits">
+            <template #append>
+              <el-button :icon="RefreshCw" :loading="commitsLoading" @click="loadStartCommits" />
+            </template>
+          </el-input>
+        </el-form-item>
+        <el-form-item v-if="startForm.reviewMode === 'RANGE'" label="起始版本" required>
+          <el-select v-model="startForm.baseRef" filterable :loading="commitsLoading" placeholder="选择起始提交">
+            <el-option v-for="commit in startCommits" :key="`base-${commit.hash}`" :label="commitOptionLabel(commit)" :value="commit.hash" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="startForm.reviewMode === 'RANGE'" label="目标版本" required>
+          <el-select v-model="startForm.targetRef" filterable :loading="commitsLoading" placeholder="选择结束提交">
+            <el-option v-for="commit in startCommits" :key="`target-${commit.hash}`" :label="commitOptionLabel(commit)" :value="commit.hash" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="startForm.reviewMode === 'COMMIT'" label="提交版本" required>
+          <el-select v-model="startForm.commitRef" filterable :loading="commitsLoading" placeholder="选择提交">
+            <el-option v-for="commit in startCommits" :key="`commit-${commit.hash}`" :label="commitOptionLabel(commit)" :value="commit.hash" />
+          </el-select>
+        </el-form-item>
+        <template v-if="startForm.reviewMode === 'SCAN'">
+          <el-form-item label="扫描路径">
+            <el-input v-model="startForm.scanPath" placeholder="多个路径使用逗号分隔" />
+          </el-form-item>
+          <el-form-item label="排除规则">
+            <el-input v-model="startForm.scanExclude" placeholder="多个模式使用逗号分隔" />
+          </el-form-item>
+          <el-form-item label="Token 预算">
+            <el-input-number v-model="startForm.maxTokensBudget" :min="0" :step="10000" />
+          </el-form-item>
+          <el-form-item label="跳过规划">
+            <el-switch v-model="startForm.scanNoPlan" />
+          </el-form-item>
+        </template>
+        <el-form-item v-if="startForm.reviewMode === 'YESTERDAY'" label="机器人通知">
+          <el-switch v-model="startForm.sendNotification" active-text="发送" inactive-text="不发送" />
+        </el-form-item>
+        <el-form-item label="业务背景">
+          <el-input v-model="startForm.background" type="textarea" :rows="3" maxlength="8000" show-word-limit />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -118,11 +169,20 @@
           </strong>
         </div>
         <div><span>分支</span><strong>{{ detail.reviewBranch }}</strong></div>
-        <div><span>检视天数</span><strong>{{ detail.reviewDays }}</strong></div>
+        <div><span>触发方式</span><strong>{{ triggerText(detail.triggerType) }}</strong></div>
+        <div><span>检视方式</span><strong>{{ reviewModeText(detail.reviewMode) }}</strong></div>
+        <div v-if="detail.reviewMode === 'YESTERDAY'"><span>机器人通知</span><strong>{{ detail.notifyEnabled === 1 ? '发送' : '不发送' }}</strong></div>
+        <div v-if="detail.reviewStartTime" class="detail-full"><span>提交时间范围</span><strong>{{ detail.reviewStartTime }} 至 {{ detail.reviewEndTime }}</strong></div>
+        <div v-if="detail.reviewMode === 'RANGE'"><span>版本区间</span><strong>{{ detail.baseRef }} → {{ detail.targetRef }}</strong></div>
+        <div v-if="detail.reviewMode === 'COMMIT'"><span>提交版本</span><strong>{{ detail.commitRef }}</strong></div>
+        <div v-if="detail.reviewMode === 'SCAN'"><span>扫描路径</span><strong>{{ detail.scanPath || '全部' }}</strong></div>
         <div><span>提交/文件/问题</span><strong>{{ detail.commitCount }} / {{ detail.diffFileCount }} / {{ detail.issueCount }}</strong></div>
         <div><span>跳过提交/文件</span><strong>{{ detail.skippedCommitCount || 0 }} / {{ detail.skippedFileCount || 0 }}</strong></div>
-        <div><span>严重度分布</span><strong>阻断 {{ detail.blockerCount }}，严重 {{ detail.criticalCount }}，主要 {{ detail.majorCount }}，次要 {{ detail.minorCount }}，提示 {{ detail.infoCount }}</strong></div>
-        <div><span>AI 调用</span><strong>{{ detail.aiCallCount }}</strong></div>
+        <div><span>严重度分布</span><strong>严重 {{ detail.criticalCount }}，高 {{ detail.highCount }}，中 {{ detail.mediumCount }}，低 {{ detail.lowCount }}</strong></div>
+        <div><span>模型调用</span><strong>{{ detail.aiCallCount }} 次（成功 {{ detail.aiSuccessCount || 0 }} / 失败 {{ detail.aiFailureCount || 0 }}）</strong></div>
+        <div><span>Token 总量</span><strong>{{ formatNumber(detail.totalTokenCount) }}</strong></div>
+        <div><span>输入/输出 Token</span><strong>{{ formatNumber(detail.inputTokenCount) }} / {{ formatNumber(detail.outputTokenCount) }}</strong></div>
+        <div><span>缓存读/写 Token</span><strong>{{ formatNumber(detail.cacheReadTokenCount) }} / {{ formatNumber(detail.cacheWriteTokenCount) }}</strong></div>
         <div><span>开始时间</span><strong>{{ detail.startTime || '-' }}</strong></div>
         <div><span>结束时间</span><strong>{{ detail.endTime || '-' }}</strong></div>
         <div class="detail-full"><span>提示</span><pre>{{ detail.warningMessage || '-' }}</pre></div>
@@ -148,11 +208,11 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus/es/components/message/index.mjs'
 import { Eye, FileText, ListChecks, Plus, RefreshCw, Search } from 'lucide-vue-next'
-import { pageProjects, type Project } from '@/api/project'
+import { listProjectCommits, pageProjects, type Project, type ProjectCommit } from '@/api/project'
 import {
   cancelReviewTask,
   getReviewTask,
@@ -165,6 +225,8 @@ import { getReviewReportByTask, type ReviewReport } from '@/api/reviewReport'
 
 const loading = ref(false)
 const starting = ref(false)
+const commitsLoading = ref(false)
+const startCommits = ref<ProjectCommit[]>([])
 const startDialogVisible = ref(false)
 const detailVisible = ref(false)
 const reportVisible = ref(false)
@@ -175,6 +237,7 @@ const report = ref<ReviewReport>()
 const total = ref(0)
 const projectOptions = ref<Project[]>([])
 const router = useRouter()
+const route = useRoute()
 let refreshTimer: number | undefined
 const taskNoTooltip = reactive({
   visible: false,
@@ -193,8 +256,25 @@ const query = reactive({
 const startForm = reactive({
   projectId: undefined as number | undefined,
   branch: '',
-  reviewDays: 7
+  reviewMode: 'RANGE' as 'RANGE' | 'YESTERDAY' | 'COMMIT' | 'WORKSPACE' | 'SCAN',
+  baseRef: '',
+  targetRef: '',
+  commitRef: '',
+  scanPath: '',
+  scanExclude: '',
+  scanNoPlan: false,
+  maxTokensBudget: 500000,
+  background: '',
+  sendNotification: false
 })
+
+const reviewModeOptions = [
+  { label: '分支区间', value: 'RANGE' },
+  { label: '昨天提交', value: 'YESTERDAY' },
+  { label: '单个提交', value: 'COMMIT' },
+  { label: '工作区', value: 'WORKSPACE' },
+  { label: '全量扫描', value: 'SCAN' }
+]
 
 const startRules: FormRules = {
   projectId: [{ required: true, message: '请选择项目', trigger: 'change' }]
@@ -226,25 +306,73 @@ async function openStart() {
     await loadProjects()
   }
   startForm.projectId = undefined
-  startForm.branch = ''
-  startForm.reviewDays = 7
+  Object.assign(startForm, {
+    branch: '', reviewMode: 'RANGE', baseRef: '', targetRef: '',
+    commitRef: '', scanPath: '', scanExclude: '', scanNoPlan: false,
+    maxTokensBudget: 500000, background: '', sendNotification: false
+  })
   startDialogVisible.value = true
 }
 
-function fillProjectDefaults(projectId: number) {
+async function fillProjectDefaults(projectId: number) {
   const project = projectOptions.value.find((item) => item.id === projectId)
   startForm.branch = project?.defaultBranch || ''
-  startForm.reviewDays = project?.reviewDays || 7
+  startCommits.value = []
+  startForm.baseRef = ''
+  startForm.targetRef = ''
+  startForm.commitRef = ''
+  await loadStartCommits()
+}
+
+async function loadStartCommits() {
+  if (!startForm.projectId || !startForm.branch.trim()) return
+  commitsLoading.value = true
+  try {
+    startCommits.value = await listProjectCommits({
+      projectId: startForm.projectId,
+      branch: startForm.branch,
+      limit: 100
+    })
+    const latest = startCommits.value[0]
+    startForm.targetRef = latest?.hash || ''
+    startForm.commitRef = latest?.hash || ''
+    startForm.baseRef = startCommits.value[1]?.hash || latest?.parentHashes?.[0] || ''
+    if (!latest) ElMessage.warning('该分支暂无可选择的提交')
+  } finally {
+    commitsLoading.value = false
+  }
+}
+
+function commitOptionLabel(commit: ProjectCommit) {
+  const time = commit.commitTime ? commit.commitTime.replace('T', ' ').slice(0, 19) : ''
+  return `${commit.shortHash}  ${commit.subject}  ${commit.author}  ${time}`
 }
 
 async function submitStart() {
   await startFormRef.value?.validate()
+  if (startForm.reviewMode === 'RANGE' && (!startForm.baseRef.trim() || !startForm.targetRef.trim())) {
+    ElMessage.warning('请选择起始提交和结束提交')
+    return
+  }
+  if (startForm.reviewMode === 'COMMIT' && !startForm.commitRef.trim()) {
+    ElMessage.warning('请选择提交版本')
+    return
+  }
   starting.value = true
   try {
     await startReviewTask({
       projectId: startForm.projectId as number,
       branch: startForm.branch || undefined,
-      reviewDays: startForm.reviewDays
+      reviewMode: startForm.reviewMode,
+      baseRef: startForm.baseRef || undefined,
+      targetRef: startForm.targetRef || undefined,
+      commitRef: startForm.commitRef || undefined,
+      scanPath: startForm.scanPath || undefined,
+      scanExclude: startForm.scanExclude || undefined,
+      scanNoPlan: startForm.scanNoPlan,
+      maxTokensBudget: startForm.maxTokensBudget,
+      background: startForm.background || undefined,
+      sendNotification: startForm.reviewMode === 'YESTERDAY' && startForm.sendNotification
     })
     ElMessage.success('检视任务已提交')
     startDialogVisible.value = false
@@ -297,6 +425,14 @@ function statusType(status: string) {
   return ({ SUCCESS: 'success', FAILED: 'danger', RUNNING: 'warning', PENDING: 'primary', CANCELED: 'info' } as Record<string, string>)[status] || 'info'
 }
 
+function triggerText(triggerType?: string) {
+  return triggerType === 'SCHEDULE' ? '每日定时' : '手动触发'
+}
+
+function reviewModeText(mode?: string) {
+  return ({ RANGE: '分支区间', YESTERDAY: '昨天提交', COMMIT: '单个提交', WORKSPACE: '工作区', SCAN: '全量扫描' } as Record<string, string>)[mode || 'RANGE'] || mode || '分支区间'
+}
+
 function statusClass(status: string) {
   return `status-${String(status || '').toLowerCase()}`
 }
@@ -307,6 +443,10 @@ function hasSkipped(task: ReviewTask) {
 
 function isFinished(task: ReviewTask) {
   return ['SUCCESS', 'FAILED', 'CANCELED'].includes(task.status)
+}
+
+function formatNumber(value?: number) {
+  return new Intl.NumberFormat('zh-CN').format(value || 0)
 }
 
 function showTaskNoTooltip(event: MouseEvent, content: string) {
@@ -332,10 +472,14 @@ function updateTaskNoTooltipPosition(event: MouseEvent) {
   taskNoTooltip.y = Math.max(16, Math.min(event.clientY + offset, window.innerHeight - 48))
 }
 
-onMounted(() => {
-  loadTasks()
-  loadProjects()
+onMounted(async () => {
+  await Promise.all([loadTasks(), loadProjects()])
   setupAutoRefresh()
+  const taskIdValue = Array.isArray(route.query.taskId) ? route.query.taskId[0] : route.query.taskId
+  const taskId = Number(taskIdValue)
+  if (route.query.report === '1' && Number.isFinite(taskId) && taskId > 0) {
+    await openReport(taskId)
+  }
 })
 
 onBeforeUnmount(() => {

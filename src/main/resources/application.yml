@@ -23,5 +23,27 @@ springdoc:
     path: /swagger-ui.html
 
 code-review:
+  app-base-url: ${CODE_REVIEW_APP_BASE_URL:http://localhost:5173}
+  git:
+    gitee-base-url: ${CODE_REVIEW_GITEE_BASE_URL:https://gitee.com}
+    gitee-ssh-private-key: ${CODE_REVIEW_GITEE_SSH_PRIVATE_KEY:}
+  zhaohu:
+    enabled: ${ZHAOHU_ENABLED:false}
+    api-host: ${ZHAOHU_API_HOST:http://gatewayoazh.cmbchina.cn}
+    client-id: ${ZHAOHU_CLIENT_ID:}
+    client-secret: ${ZHAOHU_CLIENT_SECRET:}
+    robot-id: ${ZHAOHU_ROBOT_ID:}
+    token-expire-seconds: ${ZHAOHU_TOKEN_EXPIRE_SECONDS:86400}
+    token-buffer-seconds: ${ZHAOHU_TOKEN_BUFFER_SECONDS:300}
+    timeout-seconds: ${ZHAOHU_TIMEOUT_SECONDS:10}
+  model:
+    cmb-internal-base-url: ${CMB_INTERNAL_LLM_BASE_URL:http://open-llm.uat.cmbchina.cn/llm}
   ai:
-    debug-log-enabled: true
+    debug-log-enabled: ${CODE_REVIEW_AI_DEBUG_LOG_ENABLED:false}
+  ocr:
+    command: ${CODE_REVIEW_OCR_COMMAND:}
+    bundled-version: 1.7.9
+    extract-root: ${CODE_REVIEW_OCR_EXTRACT_ROOT:}
+    concurrency: ${CODE_REVIEW_OCR_CONCURRENCY:4}
+    timeout-minutes: ${CODE_REVIEW_OCR_TIMEOUT_MINUTES:10}
+    process-timeout-minutes: ${CODE_REVIEW_OCR_PROCESS_TIMEOUT_MINUTES:15}

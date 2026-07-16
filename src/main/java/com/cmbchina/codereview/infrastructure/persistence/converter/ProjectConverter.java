@@ -15,7 +15,6 @@ public final class ProjectConverter {
         Project project = new Project();
         project.setId(entity.getId());
         project.setProjectName(entity.getProjectName());
-        project.setProjectCode(entity.getProjectCode());
         project.setProjectType(entity.getProjectType());
         project.setRepoUrl(entity.getRepoUrl());
         project.setProjectToken(entity.getProjectToken());
@@ -40,7 +39,6 @@ public final class ProjectConverter {
         ProjectEntity entity = new ProjectEntity();
         entity.setId(project.getId());
         entity.setProjectName(project.getProjectName());
-        entity.setProjectCode(project.getProjectCode());
         entity.setProjectType(project.getProjectType());
         entity.setRepoUrl(project.getRepoUrl());
         entity.setProjectToken(project.getProjectToken());

@@ -13,13 +13,11 @@ public class ReviewIssueStatisticsResponse {
 
     private Long fixedIssues;
 
-    private Long blockerCount;
-
     private Long criticalCount;
 
-    private Long majorCount;
+    private Long highCount;
 
-    private Long minorCount;
+    private Long mediumCount;
 
-    private Long infoCount;
+    private Long lowCount;
 }

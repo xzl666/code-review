@@ -4,13 +4,10 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.cmbchina.codereview.common.enums.BaseStatus;
-import com.cmbchina.codereview.common.enums.RuleKind;
 import com.cmbchina.codereview.common.exception.BizException;
 import com.cmbchina.codereview.common.exception.ErrorCode;
 import com.cmbchina.codereview.common.response.PageResponse;
-import com.cmbchina.codereview.infrastructure.persistence.entity.AiSkillEntity;
 import com.cmbchina.codereview.infrastructure.persistence.entity.ReviewRuleEntity;
-import com.cmbchina.codereview.infrastructure.persistence.mapper.AiSkillMapper;
 import com.cmbchina.codereview.infrastructure.persistence.mapper.ReviewRuleMapper;
 import com.cmbchina.codereview.interfaces.dto.request.RuleCreateRequest;
 import com.cmbchina.codereview.interfaces.dto.request.RulePageRequest;
@@ -27,25 +24,23 @@ public class RuleAppService {
 
     private final ReviewRuleMapper reviewRuleMapper;
 
-    private final AiSkillMapper aiSkillMapper;
-
-    public RuleAppService(ReviewRuleMapper reviewRuleMapper, AiSkillMapper aiSkillMapper) {
+    public RuleAppService(ReviewRuleMapper reviewRuleMapper) {
         this.reviewRuleMapper = reviewRuleMapper;
-        this.aiSkillMapper = aiSkillMapper;
     }
 
     @Transactional(rollbackFor = Exception.class)
     public Long create(RuleCreateRequest request) {
-        validateRuleBinding(request.getRuleKind(), request.getSkillId(), request.getScriptId());
         ReviewRuleEntity entity = new ReviewRuleEntity();
         entity.setRuleName(request.getRuleName());
         entity.setRuleCode(request.getRuleCode());
-        entity.setRuleKind(RuleKind.AI.name());
-        entity.setRuleType(request.getRuleType());
-        entity.setSeverity(request.getSeverity());
-        entity.setProjectType(defaultIfBlank(request.getProjectType(), "ALL"));
+        entity.setRuleKind("OCR");
+        entity.setRuleType("OTHER");
+        entity.setSeverity("HIGH");
+        entity.setProjectType("ALL");
         entity.setPromptTemplate(request.getPromptTemplate());
-        entity.setSkillId(request.getSkillId());
+        entity.setPathPattern(defaultIfBlank(request.getPathPattern(), "**/*"));
+        entity.setMergeSystemRule(request.getMergeSystemRule() == null ? 1 : request.getMergeSystemRule());
+        entity.setSkillId(null);
         entity.setScriptId(null);
         entity.setSortOrder(request.getSortOrder() == null ? 0 : request.getSortOrder());
         entity.setStatus(BaseStatus.ENABLED.getValue());
@@ -56,17 +51,18 @@ public class RuleAppService {
     @Transactional(rollbackFor = Exception.class)
     public void update(RuleUpdateRequest request) {
         ensureExists(request.getId());
-        validateRuleBinding(request.getRuleKind(), request.getSkillId(), request.getScriptId());
         ReviewRuleEntity entity = new ReviewRuleEntity();
         entity.setId(request.getId());
         entity.setRuleName(request.getRuleName());
         entity.setRuleCode(request.getRuleCode());
-        entity.setRuleKind(RuleKind.AI.name());
-        entity.setRuleType(request.getRuleType());
-        entity.setSeverity(request.getSeverity());
-        entity.setProjectType(defaultIfBlank(request.getProjectType(), "ALL"));
+        entity.setRuleKind("OCR");
+        entity.setRuleType("OTHER");
+        entity.setSeverity("HIGH");
+        entity.setProjectType("ALL");
         entity.setPromptTemplate(request.getPromptTemplate());
-        entity.setSkillId(request.getSkillId());
+        entity.setPathPattern(defaultIfBlank(request.getPathPattern(), "**/*"));
+        entity.setMergeSystemRule(request.getMergeSystemRule() == null ? 1 : request.getMergeSystemRule());
+        entity.setSkillId(null);
         entity.setScriptId(null);
         entity.setStatus(request.getStatus() == null ? BaseStatus.ENABLED.getValue() : request.getStatus());
         entity.setSortOrder(request.getSortOrder() == null ? 0 : request.getSortOrder());
@@ -109,19 +105,6 @@ public class RuleAppService {
         updateStatus(id, BaseStatus.DISABLED.getValue());
     }
 
-    private void validateRuleBinding(String ruleKind, Long skillId, Long scriptId) {
-        if (!RuleKind.AI.name().equalsIgnoreCase(ruleKind)) {
-            throw new BizException(ErrorCode.PARAM_ERROR, "检视规则仅支持 AI 类型，脚本规则请在脚本规则页面维护");
-        }
-        if (skillId == null) {
-            throw new BizException(ErrorCode.PARAM_ERROR, "AI 规则必须绑定 Skill");
-        }
-        AiSkillEntity skill = aiSkillMapper.selectById(skillId);
-        if (skill == null || skill.getStatus() == null || skill.getStatus() != BaseStatus.ENABLED.getValue()) {
-            throw new BizException(ErrorCode.PARAM_ERROR, "绑定的 Skill 不存在或未启用");
-        }
-    }
-
     private void updateStatus(Long id, Integer status) {
         ensureExists(id);
         LambdaUpdateWrapper<ReviewRuleEntity> wrapper = new LambdaUpdateWrapper<ReviewRuleEntity>()
@@ -143,13 +126,9 @@ public class RuleAppService {
         response.setId(entity.getId());
         response.setRuleName(entity.getRuleName());
         response.setRuleCode(entity.getRuleCode());
-        response.setRuleKind(entity.getRuleKind());
-        response.setRuleType(entity.getRuleType());
-        response.setSeverity(entity.getSeverity());
-        response.setProjectType(entity.getProjectType());
         response.setPromptTemplate(entity.getPromptTemplate());
-        response.setSkillId(entity.getSkillId());
-        response.setScriptId(entity.getScriptId());
+        response.setPathPattern(entity.getPathPattern());
+        response.setMergeSystemRule(entity.getMergeSystemRule());
         response.setStatus(entity.getStatus());
         response.setSortOrder(entity.getSortOrder());
         return response;

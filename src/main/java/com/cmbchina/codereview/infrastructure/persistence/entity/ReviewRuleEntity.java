@@ -28,6 +28,10 @@ public class ReviewRuleEntity extends BaseEntity {
 
     private String promptTemplate;
 
+    private String pathPattern;
+
+    private Integer mergeSystemRule;
+
     private Long skillId;
 
     private Long scriptId;

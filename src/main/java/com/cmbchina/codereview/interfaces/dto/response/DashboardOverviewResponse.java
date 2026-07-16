@@ -17,7 +17,11 @@ public class DashboardOverviewResponse {
 
     private Long todayAiCallCount;
 
-    private Long blockerCount;
+    private Long totalTokenCount;
+
+    private Long todayTokenCount;
 
     private Long criticalCount;
+
+    private Long highCount;
 }

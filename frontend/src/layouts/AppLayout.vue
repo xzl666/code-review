@@ -33,7 +33,10 @@
             后端已接入
           </div>
           <div class="env-pill">DEV</div>
-          <el-avatar :size="36" class="user-avatar">运维</el-avatar>
+          <el-select v-model="selectedUserId" filterable class="user-switch" @change="switchUser">
+            <el-option v-for="user in users" :key="user.userId" :label="`${user.userName} ${user.employeeId}`" :value="user.userId" />
+          </el-select>
+          <el-avatar :size="36" class="user-avatar">{{ currentUser?.userName?.slice(0, 2) || '用户' }}</el-avatar>
         </div>
       </el-header>
 
@@ -45,10 +48,22 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { menuItems } from '@/data/menu'
+import { listSystemUsers, type SystemUser } from '@/api/user'
+import { CURRENT_USER_KEY, currentUserId } from '@/utils/currentUser'
 
 const route = useRoute()
 const pageTitle = computed(() => String(route.meta.title || '工作台'))
+const users = ref<SystemUser[]>([])
+const selectedUserId = ref(currentUserId())
+const currentUser = computed(() => users.value.find(user => user.userId === selectedUserId.value))
+
+async function loadUsers() { users.value = await listSystemUsers() }
+function switchUser(userId: string) {
+  localStorage.setItem(CURRENT_USER_KEY, userId)
+  window.location.reload()
+}
+onMounted(loadUsers)
 </script>

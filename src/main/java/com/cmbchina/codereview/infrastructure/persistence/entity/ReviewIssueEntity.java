@@ -18,6 +18,14 @@ public class ReviewIssueEntity extends BaseEntity {
 
     private Long projectId;
 
+    private String assigneeUserId;
+
+    private String assigneeName;
+
+    private String assigneeEmployeeId;
+
+    private String commitAuthor;
+
     private Long ruleId;
 
     private Long skillId;

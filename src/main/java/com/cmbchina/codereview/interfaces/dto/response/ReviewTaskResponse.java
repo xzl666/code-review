@@ -18,7 +18,29 @@ public class ReviewTaskResponse {
 
     private String reviewBranch;
 
-    private Integer reviewDays;
+    private String reviewMode;
+
+    private String baseRef;
+
+    private String targetRef;
+
+    private String commitRef;
+
+    private String scanPath;
+
+    private String scanExclude;
+
+    private Integer scanNoPlan;
+
+    private Long maxTokensBudget;
+
+    private String reviewBackground;
+
+    private LocalDateTime reviewStartTime;
+
+    private LocalDateTime reviewEndTime;
+
+    private Integer notifyEnabled;
 
     private Integer commitCount;
 
@@ -26,17 +48,29 @@ public class ReviewTaskResponse {
 
     private Integer issueCount;
 
-    private Integer blockerCount;
-
     private Integer criticalCount;
 
-    private Integer majorCount;
+    private Integer highCount;
 
-    private Integer minorCount;
+    private Integer mediumCount;
 
-    private Integer infoCount;
+    private Integer lowCount;
 
     private Integer aiCallCount;
+
+    private Integer aiSuccessCount;
+
+    private Integer aiFailureCount;
+
+    private Long inputTokenCount;
+
+    private Long outputTokenCount;
+
+    private Long totalTokenCount;
+
+    private Long cacheReadTokenCount;
+
+    private Long cacheWriteTokenCount;
 
     private Integer skippedCommitCount;
 
