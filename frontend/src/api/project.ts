@@ -13,8 +13,6 @@ export interface Project {
   scheduleCron?: string
   scheduleEnabled?: number
   notifyEnabled?: number
-  notifyWebhookUrl?: string
-  notifyExtraParams?: string
   status: number
   remark?: string
 }
@@ -30,8 +28,6 @@ export interface ProjectForm {
   scheduleCron?: string
   scheduleEnabled?: number
   notifyEnabled?: number
-  notifyWebhookUrl?: string
-  notifyExtraParams?: string
   status?: number
   remark?: string
 }

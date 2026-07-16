@@ -84,10 +84,6 @@ public class SchemaMigrationService {
             "ALTER TABLE cr_project ADD COLUMN schedule_enabled TINYINT NOT NULL DEFAULT 0 COMMENT 'schedule enabled' AFTER schedule_cron");
         addColumnIfMissing("cr_project", "notify_enabled",
             "ALTER TABLE cr_project ADD COLUMN notify_enabled TINYINT NOT NULL DEFAULT 1 COMMENT 'notify enabled' AFTER schedule_enabled");
-        addColumnIfMissing("cr_project", "notify_webhook_url",
-            "ALTER TABLE cr_project ADD COLUMN notify_webhook_url VARCHAR(1024) DEFAULT NULL COMMENT 'project notify webhook url' AFTER notify_enabled");
-        addColumnIfMissing("cr_project", "notify_extra_params",
-            "ALTER TABLE cr_project ADD COLUMN notify_extra_params TEXT COMMENT 'project notify extra params json' AFTER notify_webhook_url");
         addColumnIfMissing("cr_review_task", "skipped_commit_count",
             "ALTER TABLE cr_review_task ADD COLUMN skipped_commit_count INT NOT NULL DEFAULT 0 COMMENT 'skipped commit count' AFTER ai_call_count");
         addColumnIfMissing("cr_review_task", "ai_success_count",
@@ -167,6 +163,8 @@ public class SchemaMigrationService {
 
         dropIndexIfExists("cr_project", "idx_project_code");
         dropColumnIfExists("cr_project", "project_code");
+        dropColumnIfExists("cr_project", "notify_extra_params");
+        dropColumnIfExists("cr_project", "notify_webhook_url");
 
         seedSystemUsers();
         normalizeOcrSeverities();

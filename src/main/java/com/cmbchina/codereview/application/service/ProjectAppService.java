@@ -42,7 +42,7 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class ProjectAppService {
 
-    private static final String DEFAULT_BRANCH = "master";
+    private static final String DEFAULT_BRANCH = "dev";
 
     private static final String DEFAULT_SCHEDULE_CRON = "0 0 7 * * *";
 
@@ -69,7 +69,6 @@ public class ProjectAppService {
         Integer scheduleEnabled = request.getScheduleEnabled() == null ? 1 : request.getScheduleEnabled();
         String scheduleCron = defaultIfBlank(request.getScheduleCron(), DEFAULT_SCHEDULE_CRON);
         validateSchedule(scheduleEnabled, scheduleCron);
-        validateNotifyExtraParams(request.getNotifyExtraParams());
         validateRepository(request.getRepoUrl(), defaultIfBlank(request.getDefaultBranch(), DEFAULT_BRANCH));
         Project project = new Project();
         project.setProjectName(request.getProjectName());
@@ -84,8 +83,6 @@ public class ProjectAppService {
         project.setScheduleCron(scheduleCron);
         project.setScheduleEnabled(scheduleEnabled);
         project.setNotifyEnabled(request.getNotifyEnabled() == null ? 1 : request.getNotifyEnabled());
-        project.setNotifyWebhookUrl(request.getNotifyWebhookUrl());
-        project.setNotifyExtraParams(request.getNotifyExtraParams());
         project.setStatus(BaseStatus.ENABLED.getValue());
         project.setRemark(request.getRemark());
         return projectRepository.save(project);
@@ -95,7 +92,6 @@ public class ProjectAppService {
     public void update(ProjectUpdateRequest request) {
         Project existing = ensureExists(request.getId());
         validateSchedule(request.getScheduleEnabled(), request.getScheduleCron());
-        validateNotifyExtraParams(request.getNotifyExtraParams());
         validateRepository(request.getRepoUrl(), defaultIfBlank(request.getDefaultBranch(), DEFAULT_BRANCH));
         Project project = new Project();
         project.setId(request.getId());
@@ -111,8 +107,6 @@ public class ProjectAppService {
         project.setScheduleCron(request.getScheduleCron());
         project.setScheduleEnabled(request.getScheduleEnabled() == null ? 0 : request.getScheduleEnabled());
         project.setNotifyEnabled(request.getNotifyEnabled() == null ? 1 : request.getNotifyEnabled());
-        project.setNotifyWebhookUrl(request.getNotifyWebhookUrl());
-        project.setNotifyExtraParams(request.getNotifyExtraParams());
         project.setStatus(request.getStatus());
         project.setRemark(request.getRemark());
         projectRepository.update(project);
@@ -286,8 +280,6 @@ public class ProjectAppService {
         response.setScheduleCron(project.getScheduleCron());
         response.setScheduleEnabled(project.getScheduleEnabled());
         response.setNotifyEnabled(project.getNotifyEnabled() == null ? 1 : project.getNotifyEnabled());
-        response.setNotifyWebhookUrl(project.getNotifyWebhookUrl());
-        response.setNotifyExtraParams(project.getNotifyExtraParams());
         response.setStatus(project.getStatus());
         response.setRemark(project.getRemark());
         return response;
@@ -397,14 +389,4 @@ public class ProjectAppService {
         }
     }
 
-    private void validateNotifyExtraParams(String value) {
-        if (!StringUtils.hasText(value)) {
-            return;
-        }
-        try {
-            new com.fasterxml.jackson.databind.ObjectMapper().readTree(value);
-        } catch (Exception exception) {
-            throw new BizException(ErrorCode.PARAM_ERROR, "通知额外参数必须是合法 JSON");
-        }
-    }
 }

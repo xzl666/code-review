@@ -15,7 +15,6 @@ import com.cmbchina.codereview.infrastructure.persistence.mapper.NotifyDeliveryL
 import com.cmbchina.codereview.infrastructure.persistence.mapper.NotifyTemplateMapper;
 import com.cmbchina.codereview.infrastructure.persistence.mapper.ReviewReportMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.core.type.TypeReference;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -116,10 +115,6 @@ public class NotificationDispatchService {
 
     private List<NotifyTarget> notifyTargets(Project project) {
         List<NotifyTarget> targets = new ArrayList<>();
-        if (project != null && StringUtils.hasText(project.getNotifyWebhookUrl())) {
-            targets.add(new NotifyTarget(null, project.getNotifyWebhookUrl()));
-            return targets;
-        }
         List<NotifyConfigEntity> configs = notifyConfigMapper.selectList(new LambdaQueryWrapper<NotifyConfigEntity>()
             .eq(NotifyConfigEntity::getEnabled, BaseStatus.ENABLED.getValue())
             .eq(NotifyConfigEntity::getChannelType, WEBHOOK));
@@ -242,7 +237,7 @@ public class NotificationDispatchService {
         variables.put("errorMessage", task.getErrorMessage());
         variables.put("reportTitle", report == null ? "" : report.getReportTitle());
         variables.put("reportHtml", report == null ? "" : report.getReportContent());
-        variables.put("customParams", customParams(project));
+        variables.put("customParams", Collections.emptyMap());
         variables.put("notificationAccount", variables.get("notifyAccount"));
         variables.put("notificationTitle", variables.get("notifyTitle"));
         variables.put("notificationContent", variables.get("notifyContent"));
@@ -270,17 +265,6 @@ public class NotificationDispatchService {
         return reviewReportMapper.selectOne(new LambdaQueryWrapper<ReviewReportEntity>()
             .eq(ReviewReportEntity::getTaskId, taskId)
             .last("LIMIT 1"));
-    }
-
-    private Map<String, Object> customParams(Project project) {
-        if (project == null || !StringUtils.hasText(project.getNotifyExtraParams())) {
-            return Collections.emptyMap();
-        }
-        try {
-            return objectMapper.readValue(project.getNotifyExtraParams(), new TypeReference<Map<String, Object>>() {});
-        } catch (Exception ignored) {
-            return Collections.emptyMap();
-        }
     }
 
     private RestTemplate restTemplate() {

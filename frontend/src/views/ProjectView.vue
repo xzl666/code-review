@@ -129,18 +129,6 @@
         <el-form-item label="结果通知">
           <el-switch v-model="notifyEnabled" active-text="开启" inactive-text="关闭" />
         </el-form-item>
-        <el-form-item v-if="form.notifyEnabled === 1" label="Webhook">
-          <el-input v-model="form.notifyWebhookUrl" placeholder="为空时使用全局启用的 Webhook 配置" />
-        </el-form-item>
-        <el-form-item v-if="form.notifyEnabled === 1" label="额外参数">
-          <el-input
-            v-model="form.notifyExtraParams"
-            type="textarea"
-            :rows="3"
-            spellcheck="false"
-            placeholder='JSON，例如 {"department":"研发","robotAtAll":false}'
-          />
-        </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.remark" type="textarea" :rows="3" />
         </el-form-item>
@@ -266,13 +254,11 @@ const form = reactive<ProjectForm>({
   projectName: '',
   projectType: 'BACKEND',
   repoUrl: '',
-  defaultBranch: 'master',
+  defaultBranch: 'dev',
   ownerUserIds: [],
   scheduleCron: '0 0 7 * * *',
   scheduleEnabled: 1,
   notifyEnabled: 1,
-  notifyWebhookUrl: '',
-  notifyExtraParams: '',
   remark: ''
 })
 
@@ -322,13 +308,11 @@ function resetForm() {
     projectName: '',
     projectType: 'BACKEND',
     repoUrl: '',
-    defaultBranch: 'master',
+    defaultBranch: 'dev',
     ownerUserIds: [],
     scheduleCron: '0 0 7 * * *',
     scheduleEnabled: 1,
     notifyEnabled: 1,
-    notifyWebhookUrl: '',
-    notifyExtraParams: '',
     remark: ''
   })
   repoCheckMessage.value = ''
@@ -371,8 +355,6 @@ function openEdit(row: Project) {
     scheduleCron: row.scheduleCron || '0 0 7 * * *',
     scheduleEnabled: row.scheduleEnabled ?? 1,
     notifyEnabled: row.notifyEnabled ?? 1,
-    notifyWebhookUrl: row.notifyWebhookUrl || '',
-    notifyExtraParams: row.notifyExtraParams || '',
     status: row.status,
     remark: row.remark || ''
   })
@@ -388,7 +370,7 @@ async function validateRepo() {
   try {
     const result = await testRepoConnection({
       repoUrl: form.repoUrl,
-      branch: form.defaultBranch || 'master',
+      branch: form.defaultBranch || 'dev',
       timeoutSeconds: 15
     })
     repoCheckSuccess.value = result.success
@@ -423,14 +405,6 @@ async function submitImport() {
 async function submitForm() {
   if (!formRef.value) return
   await formRef.value.validate()
-  if (form.notifyExtraParams?.trim()) {
-    try {
-      JSON.parse(form.notifyExtraParams)
-    } catch {
-      ElMessage.error('通知额外参数必须是合法 JSON')
-      return
-    }
-  }
   saving.value = true
   try {
     if (editingId.value) {

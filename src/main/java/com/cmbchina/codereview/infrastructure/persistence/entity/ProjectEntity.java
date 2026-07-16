@@ -36,10 +36,6 @@ public class ProjectEntity extends BaseEntity {
 
     private Integer notifyEnabled;
 
-    private String notifyWebhookUrl;
-
-    private String notifyExtraParams;
-
     private Integer status;
 
     private String remark;

@@ -25,8 +25,6 @@ public final class ProjectConverter {
         project.setScheduleCron(entity.getScheduleCron());
         project.setScheduleEnabled(entity.getScheduleEnabled());
         project.setNotifyEnabled(entity.getNotifyEnabled());
-        project.setNotifyWebhookUrl(entity.getNotifyWebhookUrl());
-        project.setNotifyExtraParams(entity.getNotifyExtraParams());
         project.setStatus(entity.getStatus());
         project.setRemark(entity.getRemark());
         return project;
@@ -49,8 +47,6 @@ public final class ProjectConverter {
         entity.setScheduleCron(project.getScheduleCron());
         entity.setScheduleEnabled(project.getScheduleEnabled());
         entity.setNotifyEnabled(project.getNotifyEnabled());
-        entity.setNotifyWebhookUrl(project.getNotifyWebhookUrl());
-        entity.setNotifyExtraParams(project.getNotifyExtraParams());
         entity.setStatus(project.getStatus());
         entity.setRemark(project.getRemark());
         return entity;
