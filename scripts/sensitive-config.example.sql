@@ -12,7 +12,11 @@ VALUES
   ('ZHAOHU_API_HOST', 'http://gatewayoazh.cmbchina.cn', 'Zhaohu API host'),
   ('ZHAOHU_CLIENT_ID', '<zhaohu-client-id>', 'Zhaohu client ID'),
   ('ZHAOHU_CLIENT_SECRET', '<zhaohu-client-secret>', 'Zhaohu client secret'),
-  ('ZHAOHU_ROBOT_ID', '<zhaohu-robot-id>', 'Zhaohu robot ID')
+  ('ZHAOHU_ROBOT_ID', '<zhaohu-robot-id>', 'Zhaohu robot ID'),
+  ('ZHAOHU_APP_BASE_URL', 'http://localhost:5173', 'Code review platform URL'),
+  ('ZHAOHU_TOKEN_EXPIRE_SECONDS', '86400', 'Zhaohu token lifetime'),
+  ('ZHAOHU_TOKEN_BUFFER_SECONDS', '300', 'Zhaohu token refresh buffer'),
+  ('ZHAOHU_TIMEOUT_SECONDS', '10', 'Zhaohu request timeout')
 ON DUPLICATE KEY UPDATE
   config_value = VALUES(config_value),
   config_desc = VALUES(config_desc),

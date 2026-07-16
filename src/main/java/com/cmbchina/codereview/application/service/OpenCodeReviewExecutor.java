@@ -11,12 +11,14 @@ import com.cmbchina.codereview.infrastructure.persistence.entity.ReviewIssueEnti
 import com.cmbchina.codereview.infrastructure.persistence.entity.ReviewRuleEntity;
 import com.cmbchina.codereview.infrastructure.persistence.entity.ReviewTaskEntity;
 import com.cmbchina.codereview.infrastructure.persistence.mapper.ReviewIssueMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -231,7 +233,7 @@ public class OpenCodeReviewExecutor {
         return file;
     }
 
-    private void configureEnvironment(ProcessBuilder builder, ActiveModelConfig model) {
+    private void configureEnvironment(ProcessBuilder builder, ActiveModelConfig model) throws Exception {
         if (!StringUtils.hasText(model.getApiKey()) || !StringUtils.hasText(model.getBaseUrl())
             || !StringUtils.hasText(model.getModelName())) {
             throw new BizException(ErrorCode.BIZ_ERROR, "OpenCodeReview 需要完整的模型 URL、模型名称和 API Key");
@@ -242,6 +244,28 @@ public class OpenCodeReviewExecutor {
         builder.environment().put("OCR_LLM_PROTOCOL", "openai");
         builder.environment().put("OCR_USE_ANTHROPIC", "false");
         builder.environment().put("OCR_NO_UPDATE", "1");
+        Path runtimeHome = prepareRuntimeHome();
+        builder.environment().put("HOME", runtimeHome.toString());
+        builder.environment().put("USERPROFILE", runtimeHome.toString());
+    }
+
+    private synchronized Path prepareRuntimeHome() throws Exception {
+        Path home = StringUtils.hasText(properties.getHomeDir())
+            ? Paths.get(properties.getHomeDir()).toAbsolutePath()
+            : Paths.get(System.getProperty("java.io.tmpdir"), "code-review", "ocr-home").toAbsolutePath();
+        Path configDir = home.resolve(".opencodereview");
+        Path configFile = configDir.resolve("config.json");
+        Files.createDirectories(configDir);
+        ObjectNode config = objectMapper.createObjectNode();
+        if (Files.isRegularFile(configFile)) {
+            JsonNode existing = objectMapper.readTree(Files.readAllBytes(configFile));
+            if (existing != null && existing.isObject()) {
+                config = (ObjectNode) existing;
+            }
+        }
+        config.put("language", defaultIfBlank(properties.getOutputLanguage(), "Chinese"));
+        Files.write(configFile, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(config));
+        return home;
     }
 
     private boolean isWindows() {

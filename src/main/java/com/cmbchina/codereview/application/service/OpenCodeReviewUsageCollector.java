@@ -81,6 +81,13 @@ public class OpenCodeReviewUsageCollector {
         if (StringUtils.hasText(properties.getSessionRoot())) {
             return Paths.get(properties.getSessionRoot());
         }
+        if (StringUtils.hasText(properties.getHomeDir())) {
+            return Paths.get(properties.getHomeDir(), ".opencodereview", "sessions");
+        }
+        Path runtimeHome = Paths.get(System.getProperty("java.io.tmpdir"), "code-review", "ocr-home");
+        if (Files.isDirectory(runtimeHome)) {
+            return runtimeHome.resolve(".opencodereview").resolve("sessions");
+        }
         return Paths.get(System.getProperty("user.home"), ".opencodereview", "sessions");
     }
 

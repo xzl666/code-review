@@ -47,3 +47,5 @@ code-review:
     concurrency: ${CODE_REVIEW_OCR_CONCURRENCY:4}
     timeout-minutes: ${CODE_REVIEW_OCR_TIMEOUT_MINUTES:10}
     process-timeout-minutes: ${CODE_REVIEW_OCR_PROCESS_TIMEOUT_MINUTES:15}
+    home-dir: ${CODE_REVIEW_OCR_HOME_DIR:}
+    output-language: Chinese

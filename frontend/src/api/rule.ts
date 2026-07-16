@@ -3,7 +3,6 @@ import { post, type PageResponse } from './http'
 export interface Rule {
   id: number
   ruleName: string
-  ruleCode: string
   promptTemplate: string
   pathPattern: string
   mergeSystemRule: number
@@ -14,7 +13,6 @@ export interface Rule {
 export interface RuleForm {
   id?: number
   ruleName: string
-  ruleCode: string
   promptTemplate: string
   pathPattern: string
   mergeSystemRule: number
@@ -24,9 +22,6 @@ export interface RuleForm {
 
 export interface RuleQuery {
   ruleName?: string
-  ruleKind?: string
-  ruleType?: string
-  projectType?: string
   status?: number
   pageNo: number
   pageSize: number

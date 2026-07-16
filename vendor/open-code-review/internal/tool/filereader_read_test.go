@@ -197,6 +197,43 @@ func TestFileReader_ReadLines_CommitMode_MissingFile(t *testing.T) {
 	}
 }
 
+func TestFileReader_DeletedFileFallsBackToBaseRef(t *testing.T) {
+	dir := setupTestRepo(t)
+	base := getHeadCommit(t, dir)
+	if err := os.Remove(filepath.Join(dir, "hello.go")); err != nil {
+		t.Fatal(err)
+	}
+	git := exec.Command("git", "add", "-A")
+	git.Dir = dir
+	if output, err := git.CombinedOutput(); err != nil {
+		t.Fatalf("git add: %v\n%s", err, output)
+	}
+	git = exec.Command("git", "-c", "user.name=test", "-c", "user.email=test@example.com",
+		"commit", "-m", "delete hello")
+	git.Dir = dir
+	if output, err := git.CombinedOutput(); err != nil {
+		t.Fatalf("git commit: %v\n%s", err, output)
+	}
+	head := getHeadCommit(t, dir)
+	fr := &FileReader{RepoDir: dir, Mode: ModeRange, Ref: head, BaseRef: base}
+
+	content, err := fr.Read(context.Background(), "hello.go")
+	if err != nil {
+		t.Fatalf("Read() fallback error: %v", err)
+	}
+	if !strings.Contains(content, "func Hello()") {
+		t.Fatalf("Read() fallback returned unexpected content: %q", content)
+	}
+
+	lines, total, err := fr.ReadLines(context.Background(), "hello.go", 1, 100)
+	if err != nil {
+		t.Fatalf("ReadLines() fallback error: %v", err)
+	}
+	if total == 0 || len(lines) == 0 || lines[0] != "package main" {
+		t.Fatalf("ReadLines() fallback returned lines=%v total=%d", lines, total)
+	}
+}
+
 func TestFileReader_Read_SubdirectoryFile(t *testing.T) {
 	dir := t.TempDir()
 	sub := filepath.Join(dir, "src", "pkg")

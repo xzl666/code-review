@@ -22,4 +22,8 @@ public class OpenCodeReviewProperties {
     private Integer processTimeoutMinutes = 15;
 
     private String sessionRoot;
+
+    private String homeDir;
+
+    private String outputLanguage = "Chinese";
 }

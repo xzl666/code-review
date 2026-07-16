@@ -25,6 +25,7 @@ public class NotifyDeliveryLogAppService {
         long pageNo = request.getPageNo() == null ? 1L : request.getPageNo();
         long pageSize = request.getPageSize() == null ? 10L : request.getPageSize();
         LambdaQueryWrapper<NotifyDeliveryLogEntity> wrapper = new LambdaQueryWrapper<NotifyDeliveryLogEntity>()
+            .eq(NotifyDeliveryLogEntity::getChannelType, "ZHAOHU")
             .like(StringUtils.hasText(request.getTaskNo()), NotifyDeliveryLogEntity::getTaskNo, request.getTaskNo())
             .eq(StringUtils.hasText(request.getEventType()), NotifyDeliveryLogEntity::getEventType, request.getEventType())
             .eq(StringUtils.hasText(request.getStatus()), NotifyDeliveryLogEntity::getStatus, request.getStatus())

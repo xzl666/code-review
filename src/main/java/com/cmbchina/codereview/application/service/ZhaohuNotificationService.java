@@ -9,6 +9,8 @@ import com.cmbchina.codereview.infrastructure.persistence.entity.ReviewIssueEnti
 import com.cmbchina.codereview.infrastructure.persistence.mapper.NotifyDeliveryLogMapper;
 import com.cmbchina.codereview.infrastructure.persistence.mapper.ReviewIssueMapper;
 import com.cmbchina.codereview.interfaces.dto.request.ZhaohuTestSendRequest;
+import com.cmbchina.codereview.interfaces.dto.request.ZhaohuConfigUpdateRequest;
+import com.cmbchina.codereview.interfaces.dto.response.ZhaohuConfigResponse;
 import com.cmbchina.codereview.interfaces.dto.response.ZhaohuTestSendResponse;
 import com.cmbchina.codereview.interfaces.dto.response.SystemUserResponse;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -118,6 +120,37 @@ public class ZhaohuNotificationService {
         return response;
     }
 
+    public ZhaohuConfigResponse getConfig() {
+        ZhaohuConfigResponse response = new ZhaohuConfigResponse();
+        response.setEnabled(enabled() ? 1 : 0);
+        response.setApiHost(apiHost());
+        response.setClientId(clientId());
+        response.setClientSecretConfigured(StringUtils.hasText(clientSecret()));
+        response.setClientSecretMasked(mask(clientSecret()));
+        response.setRobotId(robotId());
+        response.setAppBaseUrl(appBaseUrl());
+        response.setTokenExpireSeconds(tokenExpireSeconds());
+        response.setTokenBufferSeconds(tokenBufferSeconds());
+        response.setTimeoutSeconds(timeoutSeconds());
+        return response;
+    }
+
+    public void updateConfig(ZhaohuConfigUpdateRequest request) {
+        runtimeConfigService.save("ZHAOHU_ENABLED", String.valueOf(Integer.valueOf(1).equals(request.getEnabled())), "招乎机器人是否启用");
+        runtimeConfigService.save("ZHAOHU_API_HOST", request.getApiHost(), "招乎机器人 API 地址");
+        runtimeConfigService.save("ZHAOHU_CLIENT_ID", request.getClientId(), "招乎机器人 Client ID");
+        if (StringUtils.hasText(request.getClientSecret())) {
+            runtimeConfigService.save("ZHAOHU_CLIENT_SECRET", request.getClientSecret(), "招乎机器人 Client Secret");
+        }
+        runtimeConfigService.save("ZHAOHU_ROBOT_ID", request.getRobotId(), "招乎机器人 ID");
+        runtimeConfigService.save("ZHAOHU_APP_BASE_URL", request.getAppBaseUrl(), "检视平台外部访问地址");
+        runtimeConfigService.save("ZHAOHU_TOKEN_EXPIRE_SECONDS", String.valueOf(request.getTokenExpireSeconds()), "招乎令牌有效期");
+        runtimeConfigService.save("ZHAOHU_TOKEN_BUFFER_SECONDS", String.valueOf(request.getTokenBufferSeconds()), "招乎令牌刷新缓冲时间");
+        runtimeConfigService.save("ZHAOHU_TIMEOUT_SECONDS", String.valueOf(request.getTimeoutSeconds()), "招乎请求超时时间");
+        accessToken = null;
+        accessTokenExpiresAt = Instant.EPOCH;
+    }
+
     @Scheduled(fixedDelay = 60000)
     public void retryFailedDeliveries() {
         if (!enabled()) {
@@ -201,7 +234,7 @@ public class ZhaohuNotificationService {
     }
 
     String reportUrl(Long taskId, String userId) {
-        String baseUrl = StringUtils.hasText(appBaseUrl) ? appBaseUrl.trim() : "http://localhost:5173";
+        String baseUrl = appBaseUrl();
         while (baseUrl.endsWith("/")) {
             baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
         }
@@ -391,6 +424,21 @@ public class ZhaohuNotificationService {
 
     private int timeoutSeconds() {
         return runtimeConfigService.getPositiveInt("ZHAOHU_TIMEOUT_SECONDS", properties.getTimeoutSeconds(), 10);
+    }
+
+    private String appBaseUrl() {
+        return runtimeConfigService.getString("ZHAOHU_APP_BASE_URL",
+            StringUtils.hasText(appBaseUrl) ? appBaseUrl : "http://localhost:5173");
+    }
+
+    private String mask(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        if (value.length() <= 8) {
+            return "********";
+        }
+        return value.substring(0, 4) + "****" + value.substring(value.length() - 4);
     }
 
     private int value(Integer number) {

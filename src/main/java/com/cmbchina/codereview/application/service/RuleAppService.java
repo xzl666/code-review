@@ -14,6 +14,7 @@ import com.cmbchina.codereview.interfaces.dto.request.RulePageRequest;
 import com.cmbchina.codereview.interfaces.dto.request.RuleUpdateRequest;
 import com.cmbchina.codereview.interfaces.dto.response.RuleResponse;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,7 +33,7 @@ public class RuleAppService {
     public Long create(RuleCreateRequest request) {
         ReviewRuleEntity entity = new ReviewRuleEntity();
         entity.setRuleName(request.getRuleName());
-        entity.setRuleCode(request.getRuleCode());
+        entity.setRuleCode("OCR_" + UUID.randomUUID().toString().replace("-", "").toUpperCase());
         entity.setRuleKind("OCR");
         entity.setRuleType("OTHER");
         entity.setSeverity("HIGH");
@@ -54,7 +55,6 @@ public class RuleAppService {
         ReviewRuleEntity entity = new ReviewRuleEntity();
         entity.setId(request.getId());
         entity.setRuleName(request.getRuleName());
-        entity.setRuleCode(request.getRuleCode());
         entity.setRuleKind("OCR");
         entity.setRuleType("OTHER");
         entity.setSeverity("HIGH");
@@ -84,9 +84,6 @@ public class RuleAppService {
         long pageSize = request.getPageSize() == null ? 10L : request.getPageSize();
         LambdaQueryWrapper<ReviewRuleEntity> wrapper = new LambdaQueryWrapper<ReviewRuleEntity>()
             .like(StringUtils.hasText(request.getRuleName()), ReviewRuleEntity::getRuleName, request.getRuleName())
-            .eq(StringUtils.hasText(request.getRuleKind()), ReviewRuleEntity::getRuleKind, request.getRuleKind())
-            .eq(StringUtils.hasText(request.getRuleType()), ReviewRuleEntity::getRuleType, request.getRuleType())
-            .eq(StringUtils.hasText(request.getProjectType()), ReviewRuleEntity::getProjectType, request.getProjectType())
             .eq(request.getStatus() != null, ReviewRuleEntity::getStatus, request.getStatus())
             .orderByAsc(ReviewRuleEntity::getSortOrder)
             .orderByDesc(ReviewRuleEntity::getCreateTime);
@@ -125,7 +122,6 @@ public class RuleAppService {
         RuleResponse response = new RuleResponse();
         response.setId(entity.getId());
         response.setRuleName(entity.getRuleName());
-        response.setRuleCode(entity.getRuleCode());
         response.setPromptTemplate(entity.getPromptTemplate());
         response.setPathPattern(entity.getPathPattern());
         response.setMergeSystemRule(entity.getMergeSystemRule());

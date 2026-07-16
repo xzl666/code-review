@@ -77,10 +77,15 @@ func runReview(args []string) error {
 
 	mode := tool.ParseReviewMode(opts.from, opts.to, opts.commit)
 	ref, _ := mode.RefValue(opts.to, opts.commit)
+	baseRef := opts.from
+	if mode == tool.ModeCommit {
+		baseRef = opts.commit + "^"
+	}
 	fileReader := &tool.FileReader{
 		RepoDir: cc.RepoDir,
 		Mode:    mode,
 		Ref:     ref,
+		BaseRef: baseRef,
 		Runner:  cc.GitRunner,
 	}
 	tools := buildToolRegistry(rt.Collector, fileReader)

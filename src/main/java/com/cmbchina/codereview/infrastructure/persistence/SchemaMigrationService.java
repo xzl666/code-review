@@ -15,6 +15,8 @@ public class SchemaMigrationService {
 
     @PostConstruct
     public void migrate() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS cr_notify_template");
+        jdbcTemplate.execute("DROP TABLE IF EXISTS cr_notify_config");
         createTableIfMissing("cr_system_user",
             "CREATE TABLE IF NOT EXISTS cr_system_user (id BIGINT NOT NULL AUTO_INCREMENT,user_name VARCHAR(64) NOT NULL,user_id VARCHAR(64) NOT NULL,employee_id VARCHAR(32) NOT NULL,status TINYINT NOT NULL DEFAULT 1,create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,deleted TINYINT NOT NULL DEFAULT 0,PRIMARY KEY (id),UNIQUE KEY uk_user_id (user_id),UNIQUE KEY uk_employee_id (employee_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         createTableIfMissing("cr_project_owner",
@@ -59,6 +61,7 @@ public class SchemaMigrationService {
                 + "KEY idx_task (task_id),"
                 + "KEY idx_config (config_id)"
                 + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='notification delivery log'");
+        jdbcTemplate.update("DELETE FROM cr_notify_delivery_log WHERE channel_type <> 'ZHAOHU'");
         createTableIfMissing("cr_review_report",
             "CREATE TABLE IF NOT EXISTS cr_review_report ("
                 + "id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'primary key',"

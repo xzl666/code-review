@@ -34,4 +34,12 @@ public class RuntimeConfigService {
             return fallback != null && fallback > 0 ? fallback : defaultValue;
         }
     }
+
+    public void save(String key, String value, String description) {
+        SystemConfig config = new SystemConfig();
+        config.setConfigKey(key);
+        config.setConfigValue(value == null ? "" : value.trim());
+        config.setConfigDesc(description);
+        systemConfigRepository.saveOrUpdate(config);
+    }
 }

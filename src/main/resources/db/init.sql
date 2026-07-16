@@ -318,37 +318,6 @@ CREATE TABLE IF NOT EXISTS cr_review_report (
   KEY idx_task_no (task_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='检视报告表';
 
-CREATE TABLE IF NOT EXISTS cr_notify_config (
-  id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
-  config_name VARCHAR(128) NOT NULL COMMENT '配置名称',
-  channel_type VARCHAR(32) NOT NULL COMMENT '渠道类型：WEBHOOK',
-  webhook_url VARCHAR(1024) NOT NULL COMMENT 'Webhook 地址',
-  secret_encrypt VARCHAR(1024) DEFAULT NULL COMMENT 'Webhook 密钥，加密存储',
-  enabled TINYINT NOT NULL DEFAULT 1 COMMENT '是否启用',
-  create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  deleted TINYINT NOT NULL DEFAULT 0 COMMENT '逻辑删除',
-  PRIMARY KEY (id),
-  KEY idx_channel_type (channel_type),
-  KEY idx_enabled (enabled)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='通知配置表';
-
-CREATE TABLE IF NOT EXISTS cr_notify_template (
-  id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
-  template_name VARCHAR(128) NOT NULL COMMENT '模板名称',
-  template_code VARCHAR(64) NOT NULL COMMENT '模板编码',
-  channel_type VARCHAR(32) NOT NULL COMMENT '渠道类型',
-  event_type VARCHAR(64) NOT NULL COMMENT '事件类型',
-  template_content TEXT NOT NULL COMMENT '模板内容',
-  enabled TINYINT NOT NULL DEFAULT 1 COMMENT '是否启用',
-  create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  deleted TINYINT NOT NULL DEFAULT 0 COMMENT '逻辑删除',
-  PRIMARY KEY (id),
-  KEY idx_template_code (template_code),
-  KEY idx_event_type (event_type)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='通知模板表';
-
 CREATE TABLE IF NOT EXISTS cr_notify_delivery_log (
   id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
   config_id BIGINT DEFAULT NULL COMMENT '通知配置 ID',

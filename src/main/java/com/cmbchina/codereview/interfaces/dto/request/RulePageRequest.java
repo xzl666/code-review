@@ -9,11 +9,5 @@ public class RulePageRequest extends PageRequest {
 
     private String ruleName;
 
-    private String ruleKind;
-
-    private String ruleType;
-
-    private String projectType;
-
     private Integer status;
 }

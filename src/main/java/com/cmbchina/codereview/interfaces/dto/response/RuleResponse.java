@@ -9,8 +9,6 @@ public class RuleResponse {
 
     private String ruleName;
 
-    private String ruleCode;
-
     private String promptTemplate;
 
     private String pathPattern;

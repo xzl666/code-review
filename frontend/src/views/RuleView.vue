@@ -22,7 +22,6 @@
       </div>
       <el-table v-loading="loading" :data="rulesData" stripe class="data-table">
         <el-table-column prop="ruleName" label="规则名称" min-width="180" />
-        <el-table-column prop="ruleCode" label="规则编码" min-width="180" show-overflow-tooltip />
         <el-table-column prop="pathPattern" label="路径模式" min-width="230" show-overflow-tooltip />
         <el-table-column label="内置规则" width="110">
           <template #default="{ row }">{{ row.mergeSystemRule === 1 ? '合并' : '替换' }}</template>
@@ -59,9 +58,6 @@
       <el-form ref="formRef" :model="form" :rules="formRules" label-width="110px">
         <el-form-item label="规则名称" prop="ruleName">
           <el-input v-model="form.ruleName" />
-        </el-form-item>
-        <el-form-item label="规则编码" prop="ruleCode">
-          <el-input v-model="form.ruleCode" />
         </el-form-item>
         <el-form-item label="路径模式" prop="pathPattern">
           <el-input v-model="form.pathPattern" placeholder="例如：src/main/**/*.java" />
@@ -111,7 +107,6 @@ const total = ref(0)
 const query = reactive({ ruleName: '', pageNo: 1, pageSize: 10 })
 const form = reactive<RuleForm>({
   ruleName: '',
-  ruleCode: '',
   pathPattern: '**/*',
   mergeSystemRule: 1,
   promptTemplate: '',
@@ -123,7 +118,6 @@ const mergeSystemRule = computed({
 })
 const formRules: FormRules = {
   ruleName: [{ required: true, message: '请输入规则名称', trigger: 'blur' }],
-  ruleCode: [{ required: true, message: '请输入规则编码', trigger: 'blur' }],
   pathPattern: [{ required: true, message: '请输入路径模式', trigger: 'blur' }],
   promptTemplate: [{ required: true, message: '请输入规则内容', trigger: 'blur' }]
 }
@@ -141,7 +135,7 @@ async function loadRules() {
 
 function openCreate() {
   editingId.value = undefined
-  Object.assign(form, { ruleName: '', ruleCode: '', pathPattern: '**/*', mergeSystemRule: 1, promptTemplate: '', sortOrder: 0 })
+  Object.assign(form, { ruleName: '', pathPattern: '**/*', mergeSystemRule: 1, promptTemplate: '', sortOrder: 0 })
   dialogVisible.value = true
 }
 

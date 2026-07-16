@@ -39,7 +39,6 @@ public class ReviewEngineAppService {
     private final LocalRepositoryManager localRepositoryManager;
     private final GitDiffService gitDiffService;
     private final OpenCodeReviewExecutor openCodeReviewExecutor;
-    private final NotificationDispatchService notificationDispatchService;
     private final ZhaohuNotificationService zhaohuNotificationService;
     private final ReviewIssueFingerprintService reviewIssueFingerprintService;
     private final ReviewReportAppService reviewReportAppService;
@@ -52,7 +51,6 @@ public class ReviewEngineAppService {
                                   LocalRepositoryManager localRepositoryManager,
                                   GitDiffService gitDiffService,
                                   OpenCodeReviewExecutor openCodeReviewExecutor,
-                                  NotificationDispatchService notificationDispatchService,
                                   ZhaohuNotificationService zhaohuNotificationService,
                                   ReviewIssueFingerprintService reviewIssueFingerprintService,
                                   ReviewReportAppService reviewReportAppService,
@@ -64,7 +62,6 @@ public class ReviewEngineAppService {
         this.localRepositoryManager = localRepositoryManager;
         this.gitDiffService = gitDiffService;
         this.openCodeReviewExecutor = openCodeReviewExecutor;
-        this.notificationDispatchService = notificationDispatchService;
         this.zhaohuNotificationService = zhaohuNotificationService;
         this.reviewIssueFingerprintService = reviewIssueFingerprintService;
         this.reviewReportAppService = reviewReportAppService;
@@ -96,13 +93,11 @@ public class ReviewEngineAppService {
             markSuccess(taskId, diffSummary, counters, engineResult);
             generateReport(taskId);
             ReviewTaskEntity completedTask = reviewTaskMapper.selectById(taskId);
-            notificationDispatchService.notifyTaskSuccess(completedTask);
             zhaohuNotificationService.notifyDailyReviewCompleted(completedTask);
         } catch (Exception exception) {
             markFailed(taskId, exception.getMessage());
             generateReport(taskId);
             ReviewTaskEntity failedTask = reviewTaskMapper.selectById(taskId);
-            notificationDispatchService.notifyTaskFailed(failedTask);
             zhaohuNotificationService.notifyDailyReviewCompleted(failedTask);
         }
     }
