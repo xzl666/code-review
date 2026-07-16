@@ -13,6 +13,13 @@ final class SshPrivateKeyFileSupport {
     private SshPrivateKeyFileSupport() {
     }
 
+    static String normalizeContent(String privateKey) {
+        return privateKey.replace("\\n", "\n")
+            .replace("\r\n", "\n")
+            .replace('\r', '\n')
+            .trim() + "\n";
+    }
+
     static void restrictToCurrentUser(Path path) throws Exception {
         if (System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win")) {
             Process process = new ProcessBuilder(

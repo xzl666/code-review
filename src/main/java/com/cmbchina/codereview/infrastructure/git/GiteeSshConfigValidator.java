@@ -33,7 +33,7 @@ public class GiteeSshConfigValidator {
             Files.createDirectories(keyDirectory);
             keyFile = Files.createTempFile(keyDirectory, "gitee_validate_", ".key");
             outputFile = Files.createTempFile(keyDirectory, "gitee_validate_", ".log");
-            Files.write(keyFile, (privateKey.replace("\\n", "\n").trim() + System.lineSeparator())
+            Files.write(keyFile, SshPrivateKeyFileSupport.normalizeContent(privateKey)
                 .getBytes(StandardCharsets.UTF_8));
             SshPrivateKeyFileSupport.restrictToCurrentUser(keyFile);
 

@@ -60,7 +60,8 @@ public class GiteeSshCredentialManager {
 
     private void materialize(String privateKey) {
         try {
-            String normalized = privateKey.replace("\\n", "\n").trim() + System.lineSeparator();
+            // Git for Windows uses its bundled OpenSSH, which rejects OpenSSH keys ending in CRLF.
+            String normalized = SshPrivateKeyFileSupport.normalizeContent(privateKey);
             Files.createDirectories(keyPath.getParent());
             if (!Files.exists(keyPath) || !normalized.equals(new String(Files.readAllBytes(keyPath), StandardCharsets.UTF_8))) {
                 Files.write(keyPath, normalized.getBytes(StandardCharsets.UTF_8));
