@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 import com.cmbchina.codereview.infrastructure.notification.ZhaohuProperties;
+import com.cmbchina.codereview.domain.config.SystemConfigRepository;
 import com.cmbchina.codereview.infrastructure.persistence.entity.ReviewTaskEntity;
 import com.cmbchina.codereview.infrastructure.persistence.mapper.NotifyDeliveryLogMapper;
 import com.cmbchina.codereview.infrastructure.persistence.mapper.ReviewIssueMapper;
@@ -25,7 +26,8 @@ class ZhaohuNotificationServiceTest {
         properties.setToId("user-1");
         ZhaohuNotificationService service = new ZhaohuNotificationService(
             properties, mock(NotifyDeliveryLogMapper.class), objectMapper,
-            mock(ReviewIssueMapper.class), mock(JdbcTemplate.class), mock(SystemUserAppService.class));
+            mock(ReviewIssueMapper.class), mock(JdbcTemplate.class), mock(SystemUserAppService.class),
+            new RuntimeConfigService(mock(SystemConfigRepository.class)));
         ReflectionTestUtils.setField(service, "appBaseUrl", "http://localhost:5173/");
         ReviewTaskEntity task = new ReviewTaskEntity();
         task.setId(88L);

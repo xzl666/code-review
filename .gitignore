@@ -6,3 +6,6 @@ frontend/dist/
 .idea/
 .vscode/
 *.iml
+
+# Local migration file containing private keys, API keys and robot credentials.
+scripts/sensitive-config.local.sql

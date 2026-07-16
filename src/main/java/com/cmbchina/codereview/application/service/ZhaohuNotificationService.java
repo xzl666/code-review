@@ -52,6 +52,7 @@ public class ZhaohuNotificationService {
     private final ReviewIssueMapper reviewIssueMapper;
     private final JdbcTemplate jdbcTemplate;
     private final SystemUserAppService systemUserAppService;
+    private final RuntimeConfigService runtimeConfigService;
 
     @Value("${code-review.app-base-url:${CODE_REVIEW_APP_BASE_URL:http://localhost:5173}}")
     private String appBaseUrl;
@@ -64,17 +65,19 @@ public class ZhaohuNotificationService {
                                      ObjectMapper objectMapper,
                                      ReviewIssueMapper reviewIssueMapper,
                                      JdbcTemplate jdbcTemplate,
-                                     SystemUserAppService systemUserAppService) {
+                                     SystemUserAppService systemUserAppService,
+                                     RuntimeConfigService runtimeConfigService) {
         this.properties = properties;
         this.deliveryLogMapper = deliveryLogMapper;
         this.objectMapper = objectMapper;
         this.reviewIssueMapper = reviewIssueMapper;
         this.jdbcTemplate = jdbcTemplate;
         this.systemUserAppService = systemUserAppService;
+        this.runtimeConfigService = runtimeConfigService;
     }
 
     public void notifyDailyReviewCompleted(ReviewTaskEntity task) {
-        if (task == null || !Integer.valueOf(1).equals(task.getNotifyEnabled()) || !Boolean.TRUE.equals(properties.getEnabled())) {
+        if (task == null || !Integer.valueOf(1).equals(task.getNotifyEnabled()) || !enabled()) {
             return;
         }
         List<ReviewIssueEntity> allIssues = reviewIssueMapper.selectList(
@@ -117,7 +120,7 @@ public class ZhaohuNotificationService {
 
     @Scheduled(fixedDelay = 60000)
     public void retryFailedDeliveries() {
-        if (!Boolean.TRUE.equals(properties.getEnabled())) {
+        if (!enabled()) {
             return;
         }
         List<NotifyDeliveryLogEntity> logs = deliveryLogMapper.selectList(
@@ -173,7 +176,7 @@ public class ZhaohuNotificationService {
                 + issueMarkdown(recipient.issues)
                 + "**问题详情：** [查看我的问题](" + reportUrl + ")";
             Map<String, Object> body = new LinkedHashMap<>();
-            body.put("fromId", properties.getRobotId());
+            body.put("fromId", robotId());
             body.put("toId", recipient.userId);
             List<Map<String, Object>> content = new ArrayList<>();
             Map<String, Object> titleItem = new LinkedHashMap<>();
@@ -245,7 +248,7 @@ public class ZhaohuNotificationService {
     private String customCardBody(String userId, String title, String contentValue, String summary) {
         try {
             Map<String, Object> body = new LinkedHashMap<>();
-            body.put("fromId", properties.getRobotId());
+            body.put("fromId", robotId());
             body.put("toId", userId);
             List<Map<String, Object>> content = new ArrayList<>();
             Map<String, Object> titleItem = new LinkedHashMap<>();
@@ -286,8 +289,8 @@ public class ZhaohuNotificationService {
         }
         String url = UriComponentsBuilder.fromHttpUrl(apiUrl("/auth-service/oauth/token"))
             .queryParam("grant_type", "client_credentials")
-            .queryParam("client_id", properties.getClientId())
-            .queryParam("client_secret", properties.getClientSecret())
+            .queryParam("client_id", clientId())
+            .queryParam("client_secret", clientSecret())
             .build().encode().toUriString();
         ResponseEntity<String> response = restTemplate().exchange(
             url, HttpMethod.POST, HttpEntity.EMPTY, String.class);
@@ -297,8 +300,8 @@ public class ZhaohuNotificationService {
             if (!StringUtils.hasText(token)) {
                 throw new IllegalStateException("招乎 OAuth 响应缺少 access_token");
             }
-            long expiresIn = root.path("expires_in").asLong(positive(properties.getTokenExpireSeconds(), 86400));
-            long buffer = Math.min(positive(properties.getTokenBufferSeconds(), 300), Math.max(0, expiresIn - 1));
+            long expiresIn = root.path("expires_in").asLong(tokenExpireSeconds());
+            long buffer = Math.min(tokenBufferSeconds(), Math.max(0, expiresIn - 1));
             accessToken = token;
             accessTokenExpiresAt = Instant.now().plusSeconds(Math.max(1, expiresIn - buffer));
             return accessToken;
@@ -308,8 +311,8 @@ public class ZhaohuNotificationService {
     }
 
     private void requireConfiguration() {
-        if (!StringUtils.hasText(properties.getApiHost()) || !StringUtils.hasText(properties.getClientId())
-            || !StringUtils.hasText(properties.getClientSecret()) || !StringUtils.hasText(properties.getRobotId())) {
+        if (!StringUtils.hasText(apiHost()) || !StringUtils.hasText(clientId())
+            || !StringUtils.hasText(clientSecret()) || !StringUtils.hasText(robotId())) {
             throw new IllegalStateException("招乎机器人配置不完整");
         }
     }
@@ -319,13 +322,13 @@ public class ZhaohuNotificationService {
     }
 
     private String apiUrl(String path) {
-        String host = properties.getApiHost();
+        String host = apiHost();
         return (host.endsWith("/") ? host.substring(0, host.length() - 1) : host) + path;
     }
 
     private RestTemplate restTemplate() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        int timeout = positive(properties.getTimeoutSeconds(), 10) * 1000;
+        int timeout = timeoutSeconds() * 1000;
         factory.setConnectTimeout(timeout);
         factory.setReadTimeout(timeout);
         return new RestTemplate(factory);
@@ -352,14 +355,42 @@ public class ZhaohuNotificationService {
 
     private String safeError(Exception exception) {
         String message = exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage();
-        if (StringUtils.hasText(properties.getClientSecret())) {
-            message = message.replace(properties.getClientSecret(), "***");
+        if (StringUtils.hasText(clientSecret())) {
+            message = message.replace(clientSecret(), "***");
         }
         return message;
     }
 
-    private int positive(Integer number, int fallback) {
-        return number == null || number < 1 ? fallback : number;
+    private boolean enabled() {
+        return runtimeConfigService.getBoolean("ZHAOHU_ENABLED", properties.getEnabled());
+    }
+
+    private String apiHost() {
+        return runtimeConfigService.getString("ZHAOHU_API_HOST", properties.getApiHost());
+    }
+
+    private String clientId() {
+        return runtimeConfigService.getString("ZHAOHU_CLIENT_ID", properties.getClientId());
+    }
+
+    private String clientSecret() {
+        return runtimeConfigService.getString("ZHAOHU_CLIENT_SECRET", properties.getClientSecret());
+    }
+
+    private String robotId() {
+        return runtimeConfigService.getString("ZHAOHU_ROBOT_ID", properties.getRobotId());
+    }
+
+    private int tokenExpireSeconds() {
+        return runtimeConfigService.getPositiveInt("ZHAOHU_TOKEN_EXPIRE_SECONDS", properties.getTokenExpireSeconds(), 86400);
+    }
+
+    private int tokenBufferSeconds() {
+        return runtimeConfigService.getPositiveInt("ZHAOHU_TOKEN_BUFFER_SECONDS", properties.getTokenBufferSeconds(), 300);
+    }
+
+    private int timeoutSeconds() {
+        return runtimeConfigService.getPositiveInt("ZHAOHU_TIMEOUT_SECONDS", properties.getTimeoutSeconds(), 10);
     }
 
     private int value(Integer number) {

@@ -33,6 +33,8 @@ OpenCodeReview v1.7.9 源码位于 `vendor/open-code-review`，Windows/Linux 的
 
 每天的定时检视任务结束后，平台默认通过招乎机器人发送自定义卡片，卡片包含项目名称、检视分支、任务状态、个人相关问题和问题链接。前端地址可通过 `CODE_REVIEW_APP_BASE_URL` 配置。招乎参数可使用 `ZHAOHU_ENABLED`、`ZHAOHU_API_HOST`、`ZHAOHU_CLIENT_ID`、`ZHAOHU_CLIENT_SECRET` 和 `ZHAOHU_ROBOT_ID` 覆盖；OAuth Token 在内存中缓存，并在过期前 5 分钟刷新，失败消息最多自动重试 3 次。
 
+迁移环境时可复制 `scripts/sensitive-config.example.sql` 为 `scripts/sensitive-config.local.sql`，填入 Gitee SSH 私钥、模型 API Key 和招乎机器人凭据后执行。`sensitive-config.local.sql` 已加入 `.gitignore`，不会被 Git 跟踪；其中的招乎配置优先于环境变量。
+
 招乎通知按人员分别发送：问题责任人只收到分配给自己的问题，项目负责人收到项目全部问题；没有相关问题且不是项目负责人的人员不会收到该项目通知。接收方 `toId` 使用系统人员的 `userId`，消息链接为 `/issues?taskId={taskId}&userId={userId}`，打开后平台会自动切换到对应人员。通知配置页面提供“招乎测试”，可选择一个或多个人员并发送自定义标题、Markdown 内容和摘要。
 
 原有的 AI Skill、Python 脚本规则和平台内置 AI diff 分块执行链路已停用。检视规则现在直接对应 OpenCodeReview 的 `path`、`rule` 和 `merge_system_rule`。
